@@ -1,0 +1,15 @@
+.{
+    .name = .feed_me,
+    .version = "0.0.1",
+    .dependencies = .{
+        .sphtud = .{
+            .path = "sphtud",
+        },
+    },
+    .paths = .{
+        "src",
+        "build.zig",
+        "build.zig.zon",
+    },
+    .fingerprint = 0x42ce49917d7f0281,
+}
