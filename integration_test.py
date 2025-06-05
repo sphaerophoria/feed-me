@@ -5,10 +5,11 @@ import tempfile
 import subprocess
 import signal
 import json
+import datetime
 from http.client import HTTPConnection
 from pathlib import Path
 
-PORT = 9990
+PORT = 42069
 
 def send_request(method, endpoint, body_dict):
     conn = HTTPConnection("localhost", PORT)
@@ -68,6 +69,48 @@ def add_ingredient_property(ingredient_id, property_id, value):
         "value": value,
     })
 
+def add_dish(name):
+    dish = send_request("PUT", "/dishes", {
+        "name": name,
+    })
+    assert(dish is not None)
+    return dish
+
+def add_meal(timestamp, timezone):
+    meal = send_request("PUT", "/meals", {
+        "timestamp_utc": timestamp,
+        "tz_offs_min": timezone
+    })
+    assert(meal is not None)
+    return meal
+
+def add_meal_dish(meal_id, dish_id):
+    meal_dish = send_request("PUT", "/meal_dishes", {
+        "meal_id": meal_id,
+        "dish_id": dish_id,
+    })
+    assert(meal_dish is not None)
+    return meal_dish
+
+def add_meal_dish_ingredient(meal_dish_id, ingredient_id):
+    meal_dish_ingredient = send_request("PUT", "/meal_dish_ingredients", {
+        "meal_dish_id": meal_dish_id,
+        "ingredient_id": ingredient_id,
+    })
+    assert(meal_dish_ingredient is not None)
+    return meal_dish_ingredient
+
+def modify_meal_dish_ingredient(mdi_id, quantity, unit):
+    send_request("PUT", "/meal_dish_ingredients/" + str(mdi_id), {
+        "quantity": quantity,
+        "unit": unit,
+    })
+
+def get_endpoint(endpoint):
+    ret =  send_request("GET", endpoint, None)
+    assert(ret is not None)
+    return ret
+
 def get_ingredients():
     ret =  send_request("GET", "/ingredients", None)
     assert(ret is not None)
@@ -82,6 +125,20 @@ def get_properties():
     ret = send_request("GET", "/properties", None)
     assert(ret is not None)
     return ret
+
+def get_meals():
+    meals = get_endpoint("/meals")
+    for meal in meals:
+        meal["dishes"].sort(key=lambda d: d["dish_id"])
+        meal["summary"].sort(key=lambda s: s["property_id"])
+    meals.sort(key=lambda m: m["id"])
+    return meals
+
+def get_meal(meal_id):
+    meal = get_endpoint("/meals/" + str(meal_id))
+    meal["dishes"].sort(key=lambda d: d["dish_id"])
+    meal["summary"].sort(key=lambda s: s["property_id"])
+    return meal
 
 def test_ingredient(ingredient, expected_id, expected_ss_g, expected_ss_ml, expected_ss_pieces, expected_properties):
     common_tests = [
@@ -106,6 +163,56 @@ def test_ingredient(ingredient, expected_id, expected_ss_g, expected_ss_ml, expe
         assert(actual["ingredient_id"] == expected_id)
         assert(actual["property_id"] == expected[0])
         assert(actual["value"] == expected[1])
+
+def init_meal_1(today, timezone, egg_on_bread, egg, bread):
+    meal_1 = add_meal(today, timezone)
+    add_egg_on_bread_to_meal(meal_1["id"], egg_on_bread, egg, bread)
+    return meal_1
+
+def init_meal_2(today, timezone, egg_on_bread, bread_and_cheese, egg, bread, cream_cheese):
+    meal = add_meal(today, timezone)
+    add_egg_on_bread_to_meal(meal["id"], egg_on_bread, egg, bread)
+    add_bread_and_cheese_to_meal(meal["id"], bread_and_cheese, bread, cream_cheese)
+    return meal
+
+def add_egg_on_bread_to_meal(meal_id, egg_on_bread, egg, bread):
+    meal_1_dish = add_meal_dish(meal_id, egg_on_bread["id"])
+    meal_1_egg = add_meal_dish_ingredient(meal_1_dish["id"], egg["id"])
+    modify_meal_dish_ingredient(meal_1_egg["id"], 2, "pieces")
+
+    meal_1_bread = add_meal_dish_ingredient(meal_1_dish["id"], bread["id"])
+    modify_meal_dish_ingredient(meal_1_bread["id"], 2, "pieces")
+
+def add_bread_and_cheese_to_meal(meal_id, bread_and_cheese, bread, cream_cheese):
+    dish = add_meal_dish(meal_id, bread_and_cheese["id"])
+    dish_bread = add_meal_dish_ingredient(dish["id"], bread["id"])
+    modify_meal_dish_ingredient(dish_bread["id"], 2, "pieces")
+
+    dish_cheese = add_meal_dish_ingredient(dish["id"], cream_cheese["id"])
+    modify_meal_dish_ingredient(dish_cheese["id"], 50, "mass")
+
+def test_meal(meal, today, timezone, summary, dish_ids, dish_ingredients=None):
+    assert(meal["timestamp_utc"] == today)
+    assert(meal["tz_offs_min"] == timezone)
+    assert(len(meal["dishes"]) == len(dish_ids))
+    for i in range(0, len(dish_ids)):
+        dish = meal["dishes"][i]
+        expected_id = dish_ids[i]
+        assert(dish["dish_id"] == expected_id)
+
+        if dish_ingredients is not None:
+            expected_ingredients = dish_ingredients[i]
+            retreived_ingredients = dish["ingredients"]
+            assert(len(expected_ingredients) == len(retreived_ingredients))
+
+            for expected_ingredient, retrieved_ingredient in zip(expected_ingredients, retreived_ingredients):
+                for key, value in expected_ingredient.items():
+                    assert(retrieved_ingredient[key] == value)
+        else:
+            assert(dish["ingredients"] == [])
+
+
+    assert(meal["summary"] == summary);
 
 def test_endpoints():
     egg = add_ingredient("egg")
@@ -141,6 +248,18 @@ def test_endpoints():
     for [ingredient, prop, value] in options:
         add_ingredient_property(ingredient["id"], prop["id"], value)
 
+    egg_on_bread = add_dish("egg on bread")
+    bread_and_cheese = add_dish("bread and cheese")
+
+    # June 10, 2025 at whatever time I happened to get the timestamp, like,
+    # 13:06 or something
+    today = 1749585958
+    # PDT -7
+    timezone = -420
+
+    meal_1 = init_meal_1(today, timezone, egg_on_bread, egg, bread)
+    meal_2 = init_meal_2(today, timezone, egg_on_bread, bread_and_cheese, egg, bread, cream_cheese)
+
     ingredients = sorted(get_ingredients(), key=lambda i: i["id"])
 
     if len(ingredients) != 3:
@@ -170,6 +289,59 @@ def test_endpoints():
     assert(properties[0]["name"] == "calories")
     assert(properties[1]["name"] == "fat")
     assert(properties[2]["name"] == "protein")
+
+    meals = get_meals()
+
+    meal_1_expected_properties = [
+        { "property_id": calories["id"], "value": 260 },
+        { "property_id": fat["id"], "value": 11 },
+        { "property_id": protein["id"], "value": 17 },
+    ]
+
+    test_meal(meals[0], today, timezone, meal_1_expected_properties , [
+        egg_on_bread["id"]
+    ])
+
+
+    meal_2_expected_properties = [
+        {'property_id': 1, 'value': 505},
+        {'property_id': 2, 'value': 22},
+        {'property_id': 3, 'value': 25}
+    ]
+
+    test_meal(meals[1], today, timezone, meal_2_expected_properties, [
+        egg_on_bread["id"],
+        bread_and_cheese["id"],
+    ])
+
+    meal_1_retreived = get_meal(meal_1["id"])
+
+    egg_on_bread_ingredients = [
+        {'ingredient_id': egg["id"], 'quantity': 2, 'unit': 'pieces'},
+        {'ingredient_id': bread["id"], 'quantity': 2, 'unit': 'pieces'}
+    ]
+
+    bread_and_cheese_ingredients = [
+        {'ingredient_id': bread["id"], 'quantity': 2, 'unit': 'pieces'},
+        {'ingredient_id': cream_cheese["id"], 'quantity': 50, 'unit': 'mass'}
+
+    ]
+
+    test_meal(meal_1_retreived, today, timezone, meal_1_expected_properties , [
+        egg_on_bread["id"]
+    ], [
+        egg_on_bread_ingredients,
+    ])
+
+    meal_2_retreived = get_meal(meal_2["id"])
+    test_meal(meal_2_retreived, today, timezone, meal_2_expected_properties , [
+        egg_on_bread["id"],
+        bread_and_cheese["id"],
+    ], [
+        egg_on_bread_ingredients,
+        bread_and_cheese_ingredients,
+    ])
+
 
 def main(spawn_process):
     with tempfile.TemporaryDirectory() as d:

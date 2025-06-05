@@ -83,6 +83,48 @@ const HttpContext = struct {
                 try self.db.modifyIngredientProperty(id, params.value);
                 try respondEmpty(connection);
             },
+            .add_dish => {
+                const params = try parseJsonBody(api.AddDishParams, self.scratch.allocator(), body);
+                try params.validate();
+
+                const dish = try self.db.addDish(params.name);
+                try respondJson(self.scratch.allocator(), connection, dish);
+            },
+            .get_dishes => {
+                const dishes = try self.db.getDishes(self.scratch.allocator());
+                try respondJson(self.scratch.allocator(), connection, dishes);
+            },
+            .add_meal => {
+                const params = try parseJsonBody(api.AddMealParams, self.scratch.allocator(), body);
+
+                const meal = try self.db.addMeal(params);
+                try respondJson(self.scratch.allocator(), connection, meal);
+            },
+            .get_meals => {
+                const meals = try self.db.getMeals(self.scratch.allocator(), self.scratch.backLinear());
+                try respondJson(self.scratch.allocator(), connection, meals);
+            },
+            .get_meal => |id| {
+                const meal = try self.db.getMeal(self.scratch.allocator(), self.scratch.backLinear(), id);
+                try respondJson(self.scratch.allocator(), connection, meal);
+            },
+            .add_meal_dish => {
+                const params = try parseJsonBody(api.AddMealDishParams, self.scratch.allocator(), body);
+                const meal_dish = try self.db.addMealDish(params);
+                try respondJson(self.scratch.allocator(), connection, meal_dish);
+            },
+            .add_meal_dish_ingredient => {
+                const params = try parseJsonBody(api.AddMealDishIngredientParams, self.scratch.allocator(), body);
+                const meal_dish_ingredient = try self.db.addMealDishIngredient(params);
+                try respondJson(self.scratch.allocator(), connection, meal_dish_ingredient);
+            },
+            .modify_meal_dish_ingredient => |id| {
+                const params = try parseJsonBody(api.ModifyMealDishIngredientParams, self.scratch.allocator(), body);
+                try params.validate();
+
+                try self.db.modifyMealDishIngredient(id, params);
+                try respondEmpty(connection);
+            },
             .redirect_to_index => {
                 var writer = sphtud.http.httpWriter(connection.writer());
                 try writer.start(.{ .status = .moved_permanently, .content_length = 0 });
@@ -111,7 +153,7 @@ const HttpContext = struct {
                 const target_end = std.mem.indexOfScalar(u8, fs_path, '?') orelse fs_path.len;
                 const buf = self.scratch.allocMax(u8);
                 const content = try self.resource_dir.readFile(fs_path[1..target_end], buf);
-                self.scratch.shrinkTo(content.ptr + content.len);
+                self.scratch.shrinkFrontTo(content.ptr + content.len);
 
                 const content_type = contentTypeFromExtension(fs_path);
 

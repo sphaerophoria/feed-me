@@ -3,6 +3,8 @@ function prependHeaderToBody() {
   const pages = [
     ["Ingredients", "/index.html"],
     ["Properties", "/properties.html"],
+    ["Dishes", "/dishes.html"],
+    ["Meals", "/meals.html"],
   ];
 
   for (const page of pages) {

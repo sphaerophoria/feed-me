@@ -59,6 +59,38 @@ pub const ModifyIngredientParams = struct {
     }
 };
 
+pub const AddDishParams = struct {
+    name: []const u8,
+
+    pub fn validate(self: AddDishParams) !void {
+        if (self.name.len == 0) return error.InvalidName;
+    }
+};
+
+pub const AddMealParams = struct {
+    timestamp_utc: i64,
+    tz_offs_min: i64,
+};
+
+pub const AddMealDishParams = struct {
+    meal_id: i64,
+    dish_id: i64,
+};
+
+pub const AddMealDishIngredientParams = struct {
+    meal_dish_id: i64,
+    ingredient_id: i64,
+};
+
+pub const ModifyMealDishIngredientParams = struct {
+    quantity: i64,
+    unit: UnitType,
+
+    pub fn validate(self: ModifyMealDishIngredientParams) !void {
+        if (self.quantity < 0) return error.InvalidQuantity;
+    }
+};
+
 pub const Target = union(enum) {
     add_ingredient,
     get_ingredients,
@@ -68,7 +100,15 @@ pub const Target = union(enum) {
     modify_ingredient: i64,
     add_ingredient_property,
     modify_ingredient_property: i64,
+    add_dish,
+    get_dishes,
     redirect_to_index,
+    add_meal,
+    get_meals,
+    get_meal: i64,
+    add_meal_dish,
+    add_meal_dish_ingredient,
+    modify_meal_dish_ingredient: i64,
     memory_usage,
     filesystem: []const u8,
 
@@ -83,6 +123,10 @@ pub const Target = union(enum) {
             ingredients,
             properties,
             ingredient_properties,
+            dishes,
+            meals,
+            meal_dishes,
+            meal_dish_ingredients,
             memory,
         };
 
@@ -100,6 +144,8 @@ pub const Target = union(enum) {
                     switch (api) {
                         .ingredients => return .get_ingredients,
                         .properties => return .get_properties,
+                        .dishes => return .get_dishes,
+                        .meals => return .get_meals,
                         .memory => return .memory_usage,
                         else => return error.UnhandledMethod,
                     }
@@ -108,7 +154,11 @@ pub const Target = union(enum) {
                     switch (api) {
                         .ingredients => return .add_ingredient,
                         .properties => return .add_property,
+                        .dishes => return .add_dish,
                         .ingredient_properties => return .add_ingredient_property,
+                        .meals => return .add_meal,
+                        .meal_dishes => return .add_meal_dish,
+                        .meal_dish_ingredients => return .add_meal_dish_ingredient,
                         else => return error.UnhandledMethod,
                     }
                 },
@@ -125,6 +175,7 @@ pub const Target = union(enum) {
             .GET => {
                 switch (api) {
                     .ingredients => return .{ .get_ingredient = id },
+                    .meals => return .{ .get_meal = id },
                     else => return error.UnhandledMethod,
                 }
             },
@@ -132,6 +183,7 @@ pub const Target = union(enum) {
                 switch (api) {
                     .ingredients => return .{ .modify_ingredient = id },
                     .ingredient_properties => return .{ .modify_ingredient_property = id },
+                    .meal_dish_ingredients => return .{ .modify_meal_dish_ingredient = id },
                     else => return error.UnhandledMethod,
                 }
             },

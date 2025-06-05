@@ -15,6 +15,30 @@ max_ingredient_properties: usize = 100,
 typical_num_ingredients: usize = 100,
 max_num_ingredients: usize = 10000,
 
+typical_dish_dishes: usize = 100,
+max_dish_dishes: usize = 10000,
+
+typical_num_dishes: usize = 100,
+max_num_dishes: usize = 10000,
+
+// 3 years * 3 meals
+typical_num_meals: usize = 1000,
+// 100 years * 3 meals
+max_num_meals: usize = 10000,
+
+// Most times I eat 1 or a few things per meal
+// e.g.
+//   * Burger + fries + salad
+//   * spaghetti w sauce
+//   * egg on bread
+// 10 is likely a huge overestimate
+// 1000 is insane
+typical_num_meal_dishes: usize = 3,
+max_num_meal_dishes: usize = 1000,
+
+// If I put 1000 ingredients in something, wtf am i doing?
+max_num_meal_dish_ingredeints: usize = 1000,
+
 pub fn init(path: [:0]const u8) !Db {
     var db: ?*sqlite.sqlite3 = null;
     try cCheck(db, sqlite.sqlite3_open(path, &db));
@@ -40,6 +64,33 @@ pub fn init(path: [:0]const u8) !Db {
         \\    FOREIGN KEY(ingredient_id) REFERENCES ingredients(id),
         \\    FOREIGN KEY(property_id) REFERENCES properties(id),
         \\    UNIQUE(ingredient_id, property_id)
+        \\);
+        \\CREATE TABLE IF NOT EXISTS dishes(
+        \\    id INTEGER PRIMARY KEY AUTOINCREMENT,
+        \\    name TEXT UNIQUE NOT NULL
+        \\);
+        \\CREATE TABLE IF NOT EXISTS meals(
+        \\    id INTEGER PRIMARY KEY AUTOINCREMENT,
+        \\    timestamp INTEGER NOT NULL,
+        \\    tz_offs_min INTEGER NOT NULL
+        \\);
+        \\CREATE TABLE IF NOT EXISTS meal_dishes(
+        \\    id INTEGER PRIMARY KEY AUTOINCREMENT,
+        \\    meal_id INTEGER NOT NULL,
+        \\    dish_id INTEGER NOT NULL,
+        \\    FOREIGN KEY(meal_id) REFERENCES meals(id),
+        \\    FOREIGN KEY(dish_id) REFERENCES dishes(id),
+        \\    UNIQUE(meal_id, dish_id)
+        \\);
+        \\CREATE TABLE IF NOT EXISTS meal_dish_ingredients(
+        \\    id INTEGER PRIMARY KEY AUTOINCREMENT,
+        \\    meal_dish_id INTEGER NOT NULL,
+        \\    ingredient_id INTEGER NOT NULL,
+        \\    quantity INTEGER NOT NULL,
+        \\    unit INTEGER NOT NULL,
+        \\    FOREIGN KEY(meal_dish_id) REFERENCES meal_dishes(id),
+        \\    FOREIGN KEY(ingredient_id) REFERENCES ingredients(id),
+        \\    UNIQUE(meal_dish_id, ingredient_id)
         \\);
     ,
         null,
@@ -311,8 +362,351 @@ pub fn modifyIngredientProperty(self: *Db, id: i64, value: i64) !void {
     try statement.stepNoResult();
 }
 
+pub const DishProperty = struct {
+    property_id: i64,
+    value: i64,
+};
+
+pub const Dish = struct {
+    id: i64,
+    name: []const u8,
+};
+
+pub fn addDish(self: *Db, name: []const u8) !Dish {
+    const statement = try Statement.init(
+        self,
+        "INSERT INTO dishes (name) VALUES(?1)",
+    );
+    defer statement.deinit();
+
+    try statement.bindText(1, name);
+    try statement.stepNoResult();
+
+    const id = sqlite.sqlite3_last_insert_rowid(self.db);
+    return .{
+        .id = id,
+        .name = name,
+    };
+}
+
+pub fn getDishes(self: *Db, leaky: std.mem.Allocator) !sphtud.util.RuntimeSegmentedList(Dish) {
+    const statement = try Statement.init(self, "SELECT id, name FROM dishes;");
+    defer statement.deinit();
+
+    var ret = try sphtud.util.RuntimeSegmentedList(Dish).init(
+        leaky,
+        leaky,
+        self.typical_num_dishes,
+        self.max_num_dishes,
+    );
+
+    while (try statement.step()) {
+        try ret.append(.{
+            .id = try statement.geti64(0),
+            .name = try statement.getText(leaky, 1),
+        });
+    }
+
+    return ret;
+}
+
+pub const PropertySummary = struct {
+    property_id: i64,
+    value: i64,
+};
+
+pub const Meal = struct {
+    id: i64,
+    timestamp_utc: i64,
+    tz_offs_min: i64,
+    dishes: sphtud.util.RuntimeSegmentedList(MealDish),
+    summary: []PropertySummary,
+};
+
+pub fn addMeal(self: *Db, params: api.AddMealParams) !Meal {
+    const statement = try Statement.init(
+        self,
+        "INSERT INTO meals (timestamp, tz_offs_min) VALUES (?1, ?2)",
+    );
+    defer statement.deinit();
+
+    try statement.bindi64(1, params.timestamp_utc);
+    try statement.bindi64(2, params.tz_offs_min);
+
+    try statement.stepNoResult();
+    return .{
+        .id = sqlite.sqlite3_last_insert_rowid(self.db),
+        .timestamp_utc = params.timestamp_utc,
+        .tz_offs_min = params.tz_offs_min,
+        .dishes = .empty,
+        .summary = &.{},
+    };
+}
+
+pub fn getMeal(self: *Db, leaky: std.mem.Allocator, scratch: sphtud.alloc.LinearAllocator, id: i64) !Meal {
+    const statement = try Statement.init(
+        self,
+        "SELECT id, timestamp, tz_offs_min FROM meals WHERE id = ?1",
+    );
+    defer statement.deinit();
+
+    try statement.bindi64(1, id);
+
+    try statement.stepExpectRow();
+
+    const timestamp = try statement.geti64(1);
+    const tz_offs_min = try statement.geti64(2);
+
+    return .{
+        .id = id,
+        .timestamp_utc = timestamp,
+        .tz_offs_min = tz_offs_min,
+        .dishes = try self.getMealDishes(leaky, id, .with_ingredients),
+        .summary = try self.getMealSummary(leaky, scratch, id),
+    };
+}
+
+pub fn getMeals(self: *Db, leaky: std.mem.Allocator, scratch: sphtud.alloc.LinearAllocator) !sphtud.util.RuntimeSegmentedList(Meal) {
+    const statement = try Statement.init(
+        self,
+        "SELECT id, timestamp, tz_offs_min FROM meals",
+    );
+    defer statement.deinit();
+
+    var ret = try sphtud.util.RuntimeSegmentedList(Meal).init(
+        leaky,
+        leaky,
+        self.typical_num_meals,
+        self.max_num_meals,
+    );
+
+    while (try statement.step()) {
+        const meal_id = try statement.geti64(0);
+        try ret.append(.{
+            .id = meal_id,
+            .timestamp_utc = try statement.geti64(1),
+            .tz_offs_min = try statement.geti64(2),
+            .dishes = try self.getMealDishes(
+                leaky,
+                meal_id,
+                .without_ingredients,
+            ),
+            .summary = try self.getMealSummary(leaky, scratch, meal_id),
+        });
+    }
+
+    return ret;
+}
+
+fn ingredientById(ingredients: sphtud.util.RuntimeSegmentedList(Ingredient), id: i64) ?Ingredient {
+    var it = ingredients.iter();
+    while (it.next()) |ingredient| {
+        if (ingredient.id == id) {
+            return ingredient.*;
+        }
+    }
+
+    return null;
+}
+
+fn getMealSummary(self: *Db, leaky: std.mem.Allocator, scratch: sphtud.alloc.LinearAllocator, meal_id: i64) ![]PropertySummary {
+    const checkpoint = scratch.checkpoint();
+    defer scratch.restore(checkpoint);
+
+    const statement = try Statement.init(self,
+        \\SELECT mdi.quantity, mdi.unit, igp.value, igp.property_id, ig.serving_size_g, ig.serving_size_ml, ig.serving_size_pieces
+        \\    FROM meal_dish_ingredients as mdi
+        \\    LEFT JOIN ingredients as ig
+        \\        ON ig.id == mdi.ingredient_id
+        \\    CROSS JOIN ingredient_properties as igp
+        \\        ON ig.id = igp.ingredient_id
+        \\    WHERE mdi.meal_dish_id IN (
+        \\        SELECT id FROM meal_dishes WHERE meal_id = ?1
+        \\    )
+    );
+    defer statement.deinit();
+
+    try statement.bindi64(1, meal_id);
+
+    var property_id_to_total = std.AutoHashMap(i64, i64).init(scratch.allocator());
+    try property_id_to_total.ensureTotalCapacity(@intCast(self.typical_ingredient_properties));
+
+    while (try statement.step()) {
+        const quantity = try statement.geti64(0);
+        const unit = try statement.getUnitType(1);
+        const serving_amount = try statement.geti64(2);
+        const property_id = try statement.geti64(3);
+
+        // ingredient_id, quantity, unit
+        const divisor = switch (unit) {
+            .mass => try statement.geti64(4),
+            .volume => try statement.geti64(5),
+            .pieces => try statement.geti64(6),
+        };
+
+        const value = if (divisor == 0) -1 else @divTrunc(serving_amount * quantity, divisor);
+        const gop = try property_id_to_total.getOrPut(property_id);
+        if (!gop.found_existing) {
+            gop.value_ptr.* = 0;
+        }
+
+        if (value < 0) {
+            gop.value_ptr.* = -1;
+        } else {
+            gop.value_ptr.* += value;
+        }
+    }
+
+    var it = property_id_to_total.iterator();
+    var ret = try sphtud.util.RuntimeBoundedArray(PropertySummary).init(leaky, property_id_to_total.count());
+    while (it.next()) |entry| {
+        ret.append(.{
+            .property_id = entry.key_ptr.*,
+            .value = entry.value_ptr.*,
+        }) catch unreachable;
+    }
+    return ret.items;
+}
+
+pub const MealDishIngredient = struct {
+    id: i64,
+    meal_dish_id: i64,
+    ingredient_id: i64,
+    quantity: i64,
+    unit: api.UnitType,
+};
+
+pub const MealDish = struct {
+    id: i64,
+    meal_id: i64,
+    dish_id: i64,
+    ingredients: []MealDishIngredient,
+};
+
+pub fn addMealDish(self: *Db, params: api.AddMealDishParams) !MealDish {
+    const statement = try Statement.init(
+        self,
+        "INSERT INTO meal_dishes (meal_id, dish_id) VALUES (?1, ?2)",
+    );
+    defer statement.deinit();
+
+    try statement.bindi64(1, params.meal_id);
+    try statement.bindi64(2, params.dish_id);
+
+    try statement.stepNoResult();
+
+    return .{
+        .id = sqlite.sqlite3_last_insert_rowid(self.db),
+        .meal_id = params.meal_id,
+        .dish_id = params.dish_id,
+        .ingredients = &.{},
+    };
+}
+
+const GetMealDishType = enum {
+    with_ingredients,
+    without_ingredients,
+};
+
+pub fn getMealDishes(self: *Db, leaky: std.mem.Allocator, meal_id: i64, retrieveal_type: GetMealDishType) !sphtud.util.RuntimeSegmentedList(MealDish) {
+    const statement = try Statement.init(
+        self,
+        "SELECT id, dish_id FROM meal_dishes WHERE meal_id = ?1",
+    );
+    defer statement.deinit();
+
+    try statement.bindi64(1, meal_id);
+    var ret = try sphtud.util.RuntimeSegmentedList(MealDish).init(
+        leaky,
+        leaky,
+        self.typical_num_meal_dishes,
+        self.max_num_meal_dishes,
+    );
+
+    while (try statement.step()) {
+        const meal_dish_id = try statement.geti64(0);
+        const ingredients: []MealDishIngredient = switch (retrieveal_type) {
+            .with_ingredients => try self.getMealDishIngredients(leaky, meal_dish_id),
+            .without_ingredients => &.{},
+        };
+
+        try ret.append(.{
+            .id = meal_dish_id,
+            .meal_id = meal_id,
+            .dish_id = try statement.geti64(1),
+            .ingredients = ingredients,
+        });
+    }
+
+    return ret;
+}
+
+pub fn addMealDishIngredient(self: *Db, params: api.AddMealDishIngredientParams) !MealDishIngredient {
+    const statement = try Statement.init(self,
+        \\INSERT INTO meal_dish_ingredients
+        \\    (meal_dish_id, ingredient_id, quantity, unit)
+        \\    VALUES (?1, ?2, 0, 0);
+    );
+    defer statement.deinit();
+
+    try statement.bindi64(1, params.meal_dish_id);
+    try statement.bindi64(2, params.ingredient_id);
+
+    try statement.stepNoResult();
+
+    return .{
+        .id = sqlite.sqlite3_last_insert_rowid(self.db),
+        .meal_dish_id = params.meal_dish_id,
+        .ingredient_id = params.ingredient_id,
+        .quantity = 0,
+        .unit = @enumFromInt(0),
+    };
+}
+
+pub fn modifyMealDishIngredient(self: *Db, id: i64, params: api.ModifyMealDishIngredientParams) !void {
+    const statement = try Statement.init(self,
+        \\UPDATE meal_dish_ingredients
+        \\    SET quantity = ?2, unit = ?3
+        \\    WHERE id = ?1
+    );
+    defer statement.deinit();
+
+    try statement.bindi64(1, id);
+    try statement.bindi64(2, params.quantity);
+    try statement.bindInt(3, @intFromEnum(params.unit));
+
+    try statement.stepNoResult();
+}
+
+pub fn getMealDishIngredients(self: *Db, leaky: std.mem.Allocator, meal_dish_id: i64) ![]MealDishIngredient {
+    const statement = try Statement.init(
+        self,
+        "SELECT id, ingredient_id, quantity, unit FROM meal_dish_ingredients WHERE meal_dish_id = ?1",
+    );
+    defer statement.deinit();
+
+    try statement.bindi64(1, meal_dish_id);
+    var ret = try sphtud.util.RuntimeBoundedArray(MealDishIngredient).init(
+        leaky,
+        self.max_num_meal_dish_ingredeints,
+    );
+
+    while (try statement.step()) {
+        try ret.append(.{
+            .id = try statement.geti64(0),
+            .meal_dish_id = meal_dish_id,
+            .ingredient_id = try statement.geti64(1),
+            .quantity = try statement.geti64(2),
+            .unit = try statement.getUnitType(3),
+        });
+    }
+
+    return ret.items;
+}
+
 const Statement = struct {
     inner: *sqlite.sqlite3_stmt,
+    db: *Db,
 
     fn init(db: *Db, sql: []const u8) !Statement {
         var statement: ?*sqlite.sqlite3_stmt = null;
@@ -326,6 +720,7 @@ const Statement = struct {
 
         return .{
             .inner = statement orelse unreachable,
+            .db = db,
         };
     }
 
@@ -334,15 +729,15 @@ const Statement = struct {
     }
 
     fn bindInt(self: Statement, column: c_int, val: c_int) !void {
-        try cCheckNoMsg(sqlite.sqlite3_bind_int(self.inner, column, val));
+        try cCheck(self.db.db, sqlite.sqlite3_bind_int(self.inner, column, val));
     }
 
     fn bindi64(self: Statement, column: c_int, val: i64) !void {
-        try cCheckNoMsg(sqlite.sqlite3_bind_int64(self.inner, column, val));
+        try cCheck(self.db.db, sqlite.sqlite3_bind_int64(self.inner, column, val));
     }
 
     fn bindText(self: Statement, column: c_int, val: []const u8) !void {
-        try cCheckNoMsg(sqlite.sqlite3_bind_text(
+        try cCheck(self.db.db, sqlite.sqlite3_bind_text(
             self.inner,
             column,
             val.ptr,
@@ -394,24 +789,20 @@ const Statement = struct {
 
     fn stepNoResult(self: Statement) !void {
         const ret = sqlite.sqlite3_step(self.inner);
-        try cCheckNoMsg(ret);
+        try cCheck(self.db.db, ret);
     }
 };
 
-fn cCheckNoMsg(ret: c_int) !void {
-    switch (ret) {
-        0 => {},
-        sqlite.SQLITE_DONE => {},
-        sqlite.SQLITE_CONSTRAINT => return error.SqliteConstraint,
-        else => return error.Sqlite,
-    }
-}
-
 fn cCheck(db: ?*sqlite.sqlite3, ret: c_int) !void {
-    if (ret != 0) {
-        if (sqlite.sqlite3_errmsg(db)) |msg| {
-            std.log.err("sqlite error: \"{s}\"", .{msg});
-        }
-        return error.Sqlite;
+    const err = switch (ret) {
+        0, sqlite.SQLITE_DONE => return,
+        sqlite.SQLITE_CONSTRAINT => error.SqliteConstraint,
+        else => error.Sqlite,
+    };
+
+    if (sqlite.sqlite3_errmsg(db)) |msg| {
+        std.log.err("sqlite error: \"{s}\"", .{msg});
     }
+
+    return err;
 }
