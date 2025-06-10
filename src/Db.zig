@@ -42,6 +42,7 @@ max_num_meal_dish_ingredeints: usize = 1000,
 pub fn init(path: [:0]const u8) !Db {
     var db: ?*sqlite.sqlite3 = null;
     try cCheck(db, sqlite.sqlite3_open(path, &db));
+    try cCheck(db, sqlite.sqlite3_exec(db, "PRAGMA foreign_keys = ON", null, null, null));
 
     try cCheck(db, sqlite.sqlite3_exec(
         db,
@@ -61,8 +62,8 @@ pub fn init(path: [:0]const u8) !Db {
         \\    ingredient_id INTEGER NOT NULL,
         \\    property_id INTEGER NOT NULL,
         \\    value INTEGER NOT NULL,
-        \\    FOREIGN KEY(ingredient_id) REFERENCES ingredients(id),
-        \\    FOREIGN KEY(property_id) REFERENCES properties(id),
+        \\    FOREIGN KEY(ingredient_id) REFERENCES ingredients(id) ON DELETE CASCADE,
+        \\    FOREIGN KEY(property_id) REFERENCES properties(id) ON DELETE CASCADE,
         \\    UNIQUE(ingredient_id, property_id)
         \\);
         \\CREATE TABLE IF NOT EXISTS dishes(
@@ -78,8 +79,8 @@ pub fn init(path: [:0]const u8) !Db {
         \\    id INTEGER PRIMARY KEY AUTOINCREMENT,
         \\    meal_id INTEGER NOT NULL,
         \\    dish_id INTEGER NOT NULL,
-        \\    FOREIGN KEY(meal_id) REFERENCES meals(id),
-        \\    FOREIGN KEY(dish_id) REFERENCES dishes(id),
+        \\    FOREIGN KEY(meal_id) REFERENCES meals(id) ON DELETE CASCADE,
+        \\    FOREIGN KEY(dish_id) REFERENCES dishes(id) ON DELETE CASCADE,
         \\    UNIQUE(meal_id, dish_id)
         \\);
         \\CREATE TABLE IF NOT EXISTS meal_dish_ingredients(
@@ -88,8 +89,8 @@ pub fn init(path: [:0]const u8) !Db {
         \\    ingredient_id INTEGER NOT NULL,
         \\    quantity INTEGER NOT NULL,
         \\    unit INTEGER NOT NULL,
-        \\    FOREIGN KEY(meal_dish_id) REFERENCES meal_dishes(id),
-        \\    FOREIGN KEY(ingredient_id) REFERENCES ingredients(id),
+        \\    FOREIGN KEY(meal_dish_id) REFERENCES meal_dishes(id) ON DELETE CASCADE,
+        \\    FOREIGN KEY(ingredient_id) REFERENCES ingredients(id) ON DELETE CASCADE,
         \\    UNIQUE(meal_dish_id, ingredient_id)
         \\);
     ,
@@ -464,6 +465,61 @@ pub fn getMeal(self: *Db, leaky: std.mem.Allocator, scratch: sphtud.alloc.Linear
         .dishes = try self.getMealDishes(leaky, id, .with_ingredients),
         .summary = try self.getMealSummary(leaky, scratch, id),
     };
+}
+
+pub fn deleteMeal(self: *Db, meal_id: i64) !void {
+    // ON CASCADE ensures that this propagates to all relevant places
+    const statement = try Statement.init(
+        self,
+        "DELETE FROM meals WHERE id = ?1",
+    );
+    defer statement.deinit();
+
+    try statement.bindi64(1, meal_id);
+    try statement.stepNoResult();
+}
+
+fn countTableEntries(db: *Db, comptime table: []const u8) !usize {
+    var statement = try Statement.init(db, "SELECT COUNT(*) FROM " ++ table);
+    defer statement.deinit();
+
+    try statement.stepExpectRow();
+    return @intCast(try statement.geti64(0));
+}
+
+test "deleteMeal cascade" {
+    // Mostly covered by integration test, but here we want to ensure that the
+    // database state is as expected, which is not visible in the API
+
+    var db = try Db.init(":memory:");
+    const meal = try db.addMeal(.{
+        .timestamp_utc = 1234,
+        .tz_offs_min = -420,
+    });
+
+    const dish = try db.addDish("dish");
+
+    const meal_dish = try db.addMealDish(.{
+        .meal_id = meal.id,
+        .dish_id = dish.id,
+    });
+
+    const ingredient = try db.addIngredient("ingredient");
+
+    _ = try db.addMealDishIngredient(.{
+        .meal_dish_id = meal_dish.id,
+        .ingredient_id = ingredient.id,
+    });
+
+    try std.testing.expectEqual(1, try countTableEntries(&db, "meals"));
+    try std.testing.expectEqual(1, try countTableEntries(&db, "meal_dishes"));
+    try std.testing.expectEqual(1, try countTableEntries(&db, "meal_dish_ingredients"));
+
+    try db.deleteMeal(meal.id);
+
+    try std.testing.expectEqual(0, try countTableEntries(&db, "meals"));
+    try std.testing.expectEqual(0, try countTableEntries(&db, "meal_dishes"));
+    try std.testing.expectEqual(0, try countTableEntries(&db, "meal_dish_ingredients"));
 }
 
 pub fn getMeals(self: *Db, leaky: std.mem.Allocator, scratch: sphtud.alloc.LinearAllocator) !sphtud.util.RuntimeSegmentedList(Meal) {

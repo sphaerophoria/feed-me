@@ -108,6 +108,10 @@ const HttpContext = struct {
                 const meal = try self.db.getMeal(self.scratch.allocator(), self.scratch.backLinear(), id);
                 try respondJson(self.scratch.allocator(), connection, meal);
             },
+            .delete_meal => |id| {
+                try self.db.deleteMeal(id);
+                try respondEmpty(connection);
+            },
             .add_meal_dish => {
                 const params = try parseJsonBody(api.AddMealDishParams, self.scratch.allocator(), body);
                 const meal_dish = try self.db.addMealDish(params);

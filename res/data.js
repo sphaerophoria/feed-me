@@ -114,6 +114,15 @@ class Meal {
     return "/meals/" + this.id;
   }
 
+  async deleteMeal() {
+    const response = await fetch(this.mealUrl(), {
+      method: "DELETE",
+    });
+    if (response.status != 200) {
+      throw new Error("Failed to delete moeal");
+    }
+  }
+
   async addDish(params) {
     const response = await fetch("/meal_dishes", {
       method: "PUT",

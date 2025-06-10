@@ -108,6 +108,7 @@ pub const Target = union(enum) {
     get_meal: i64,
     add_meal_dish,
     add_meal_dish_ingredient,
+    delete_meal: i64,
     modify_meal_dish_ingredient: i64,
     memory_usage,
     filesystem: []const u8,
@@ -184,6 +185,12 @@ pub const Target = union(enum) {
                     .ingredients => return .{ .modify_ingredient = id },
                     .ingredient_properties => return .{ .modify_ingredient_property = id },
                     .meal_dish_ingredients => return .{ .modify_meal_dish_ingredient = id },
+                    else => return error.UnhandledMethod,
+                }
+            },
+            .DELETE => {
+                switch (api) {
+                    .meals => return .{ .delete_meal = id },
                     else => return error.UnhandledMethod,
                 }
             },

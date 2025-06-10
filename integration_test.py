@@ -140,6 +140,9 @@ def get_meal(meal_id):
     meal["summary"].sort(key=lambda s: s["property_id"])
     return meal
 
+def delete_meal(meal_id):
+    send_request("DELETE", "/meals/" + str(meal_id), None)
+
 def test_ingredient(ingredient, expected_id, expected_ss_g, expected_ss_ml, expected_ss_pieces, expected_properties):
     common_tests = [
             ["id", expected_id],
@@ -341,6 +344,12 @@ def test_endpoints():
         egg_on_bread_ingredients,
         bread_and_cheese_ingredients,
     ])
+
+    delete_meal(meal_2["id"]);
+    meals = get_meals()
+
+    assert(len(meals) == 1)
+    assert(meals[0]["id"] == meal_1["id"])
 
 
 def main(spawn_process):

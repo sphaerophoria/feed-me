@@ -10,6 +10,9 @@ const properties = makeProperties();
 /** @type HTMLSpanElement */
 const meal_id_node = document.getElementById("meal_id");
 
+/** @type HTMLButtonElement*/
+const delete_meal_button = document.getElementById("delete_meal");
+
 /** @type HTMLSelectElement */
 const instantiate_dish_dropdown = document.getElementById(
   "instantiate_dish_dropdown",
@@ -265,6 +268,15 @@ async function init() {
       });
     },
   );
+
+  delete_meal_button.onclick = async () => {
+    try {
+      await meal.deleteMeal();
+      window.location.href = "/meals.html";
+    } catch {
+      // Put error somewhere visible to user
+    }
+  };
 }
 
 window.onload = init;
