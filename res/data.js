@@ -86,6 +86,44 @@ class MealDish {
     }
     return new_ingredient;
   }
+
+  async removeIngredient(id) {
+    const response = await fetch("/meal_dish_ingredients/" + id, {
+      method: "DELETE",
+    });
+
+    if (response.status != 200) {
+      throw new Error("Failed to delete meal dish ingredient");
+    }
+
+    for (let i = 0; i < this.data.ingredients.length; i++) {
+      if (this.data.ingredients[i].id === id) {
+        this.data.ingredients.splice(i, 1);
+      }
+    }
+  }
+
+  async copyFrom(id) {
+    const response = await fetch("/copy_meal_dish", {
+      method: "PUT",
+      body: JSON.stringify({
+        from_meal_dish_id: id,
+        to_meal_dish_id: this.id(),
+      }),
+    });
+
+    if (response.status != 200) {
+      throw new Error("Failed to copy meal dish ingredient");
+    }
+
+    const ingredients = await response.json();
+    for (const ingredient of ingredients) {
+      this.data.ingredients.push(ingredient);
+      if (this.new_ingredient_callback !== null) {
+        this.new_ingredient_callback(ingredient);
+      }
+    }
+  }
 }
 
 class Meal {
@@ -112,6 +150,10 @@ class Meal {
 
   mealUrl() {
     return "/meals/" + this.id;
+  }
+
+  date() {
+    return new Date(this.data.timestamp_utc);
   }
 
   async deleteMeal() {

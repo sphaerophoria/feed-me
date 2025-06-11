@@ -734,6 +734,34 @@ pub fn modifyMealDishIngredient(self: *Db, id: i64, params: api.ModifyMealDishIn
     try statement.stepNoResult();
 }
 
+pub fn deleteMealDishIngredient(self: *Db, id: i64) !void {
+    const statement = try Statement.init(
+        self,
+        "DELETE FROM  meal_dish_ingredients WHERE id = ?1",
+    );
+    defer statement.deinit();
+
+    try statement.bindi64(1, id);
+    try statement.stepNoResult();
+}
+
+pub fn copyMealDish(self: *Db, leaky: std.mem.Allocator, params: api.CopyMealDishParams) ![]MealDishIngredient {
+    const statement = try Statement.init(self,
+        \\INSERT INTO meal_dish_ingredients (meal_dish_id, ingredient_id, quantity, unit)
+        \\SELECT ?2, ingredient_id, quantity, unit
+        \\    FROM meal_dish_ingredients
+        \\    WHERE meal_dish_id = ?1
+    );
+    defer statement.deinit();
+
+    try statement.bindi64(1, params.from_meal_dish_id);
+    try statement.bindi64(2, params.to_meal_dish_id);
+
+    try statement.stepNoResult();
+
+    return self.getMealDishIngredients(leaky, params.to_meal_dish_id);
+}
+
 pub fn getMealDishIngredients(self: *Db, leaky: std.mem.Allocator, meal_dish_id: i64) ![]MealDishIngredient {
     const statement = try Statement.init(
         self,

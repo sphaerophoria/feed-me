@@ -129,6 +129,15 @@ const HttpContext = struct {
                 try self.db.modifyMealDishIngredient(id, params);
                 try respondEmpty(connection);
             },
+            .copy_meal_dish => {
+                const params = try parseJsonBody(api.CopyMealDishParams, self.scratch.allocator(), body);
+                const new_ingredients = try self.db.copyMealDish(self.scratch.allocator(), params);
+                try respondJson(self.scratch.allocator(), connection, new_ingredients);
+            },
+            .delete_meal_dish_ingredient => |id| {
+                try self.db.deleteMealDishIngredient(id);
+                try respondEmpty(connection);
+            },
             .redirect_to_index => {
                 var writer = sphtud.http.httpWriter(connection.writer());
                 try writer.start(.{ .status = .moved_permanently, .content_length = 0 });

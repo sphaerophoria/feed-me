@@ -1,3 +1,23 @@
 .meal-content {
   margin-left: 2rem;
 }
+
+table {
+  width: unset;
+}
+
+td {
+  vertical-align: middle;
+}
+
+td * {
+  margin: 0px;
+}
+
+.ingredient_label {
+  min-width: 100px;
+}
+
+.ingredients_added * .copy_dish {
+  visibility: hidden;
+}

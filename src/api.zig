@@ -91,6 +91,11 @@ pub const ModifyMealDishIngredientParams = struct {
     }
 };
 
+pub const CopyMealDishParams = struct {
+    from_meal_dish_id: i64,
+    to_meal_dish_id: i64,
+};
+
 pub const Target = union(enum) {
     add_ingredient,
     get_ingredients,
@@ -106,10 +111,12 @@ pub const Target = union(enum) {
     add_meal,
     get_meals,
     get_meal: i64,
+    delete_meal: i64,
     add_meal_dish,
     add_meal_dish_ingredient,
-    delete_meal: i64,
+    delete_meal_dish_ingredient: i64,
     modify_meal_dish_ingredient: i64,
+    copy_meal_dish,
     memory_usage,
     filesystem: []const u8,
 
@@ -128,6 +135,7 @@ pub const Target = union(enum) {
             meals,
             meal_dishes,
             meal_dish_ingredients,
+            copy_meal_dish,
             memory,
         };
 
@@ -160,6 +168,7 @@ pub const Target = union(enum) {
                         .meals => return .add_meal,
                         .meal_dishes => return .add_meal_dish,
                         .meal_dish_ingredients => return .add_meal_dish_ingredient,
+                        .copy_meal_dish => return .copy_meal_dish,
                         else => return error.UnhandledMethod,
                     }
                 },
@@ -191,6 +200,7 @@ pub const Target = union(enum) {
             .DELETE => {
                 switch (api) {
                     .meals => return .{ .delete_meal = id },
+                    .meal_dish_ingredients => return .{ .delete_meal_dish_ingredient = id },
                     else => return error.UnhandledMethod,
                 }
             },
