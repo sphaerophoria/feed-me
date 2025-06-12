@@ -1,7 +1,8 @@
 class RemoteItemArray {
-  constructor(url) {
+  constructor(url, ItemType) {
     this.url = url;
     this.items = [];
+    this.ItemType = ItemType;
     this.new_callback = null;
   }
 
@@ -18,7 +19,12 @@ class RemoteItemArray {
     // FIXME: This should check for new items vs existing ones and call
     // new_callback but for now this is good enough :)
     const response = await fetch(this.url);
-    this.items = await response.json();
+    const json = await response.json();
+    if (this.ItemType !== undefined) {
+      this.items = json.map((item) => new this.ItemType(item));
+    } else {
+      this.items = json;
+    }
   }
 
   async add(params) {
@@ -27,9 +33,10 @@ class RemoteItemArray {
       body: params !== null ? JSON.stringify(params) : null,
     });
     const json = await response.json();
-    this.items.push(json);
+    const item = this.ItemType !== undefined ? new this.ItemType(json) : json;
+    this.items.push(item);
     if (this.new_callback !== null) {
-      this.new_callback(json);
+      this.new_callback(item);
     }
 
     return json;
@@ -41,6 +48,29 @@ class RemoteItemArray {
     }
 
     return null;
+  }
+}
+
+class Property {
+  constructor(data) {
+    this.data = data;
+  }
+
+  get id() {
+    return this.data.id;
+  }
+
+  get name() {
+    return this.data.name;
+  }
+
+  modify(new_name) {
+    fetch("/properties/" + this.id, {
+      method: "PUT",
+      body: JSON.stringify({
+        name: new_name,
+      }),
+    });
   }
 }
 
@@ -183,7 +213,7 @@ function makeIngredients() {
 }
 
 function makeProperties() {
-  return new RemoteItemArray("/properties");
+  return new RemoteItemArray("/properties", Property);
 }
 
 function makeDishes() {

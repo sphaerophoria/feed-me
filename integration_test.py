@@ -55,6 +55,11 @@ def add_property(name):
     assert(p is not None)
     return p
 
+def modify_property(prop_id, name):
+    send_request("PUT", "/properties/" + str(prop_id), {
+        "name": name,
+    })
+
 
 def add_ingredient_property(ingredient_id, property_id, value):
     ingredient_property = send_request("PUT", "/ingredient_properties", {
@@ -233,7 +238,8 @@ def test_endpoints():
 
     calories = add_property("calories")
     fat = add_property("fat")
-    protein = add_property("protein")
+    protein = add_property("proteinn")
+    modify_property(protein["id"], "protein")
 
     options = [
             # Serving size 1 egg 50g

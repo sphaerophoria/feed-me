@@ -92,10 +92,10 @@ pub const AddIngredient = struct {
     }
 };
 
-pub const AddProperty = struct {
+pub const AddModifyProperty = struct {
     name: []const u8,
 
-    pub fn validate(self: AddProperty) !void {
+    pub fn validate(self: AddModifyProperty) !void {
         if (self.name.len == 0) return error.InvalidName;
     }
 };
@@ -183,6 +183,7 @@ pub const Target = union(enum) {
     get_ingredient: i64,
     get_properties,
     add_property,
+    modify_property: i64,
     modify_ingredient: i64,
     add_ingredient_property,
     modify_ingredient_property: i64,
@@ -272,6 +273,7 @@ pub const Target = union(enum) {
             },
             .PUT => {
                 switch (api) {
+                    .properties => return .{ .modify_property = id },
                     .ingredients => return .{ .modify_ingredient = id },
                     .ingredient_properties => return .{ .modify_ingredient_property = id },
                     .meal_dish_ingredients => return .{ .modify_meal_dish_ingredient = id },

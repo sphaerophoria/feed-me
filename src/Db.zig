@@ -330,6 +330,19 @@ pub fn addProperty(self: *Db, name: []const u8) !Property {
     };
 }
 
+pub fn modifyProperty(self: *Db, id: i64, name: []const u8) !void {
+    const statement = try Statement.init(
+        self,
+        "UPDATE properties SET name = ?2 WHERE id = ?1",
+    );
+    defer statement.deinit();
+
+    try statement.bindi64(1, id);
+    try statement.bindText(2, name);
+
+    try statement.stepNoResult();
+}
+
 pub fn addIngredientProperty(self: *Db, params: api.AddIngredientPropertyParams) !IngredientProperty {
     const statement = try Statement.init(
         self,

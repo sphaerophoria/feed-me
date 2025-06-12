@@ -3,10 +3,6 @@ import { makeProperties } from "./data.js";
 
 const properties = makeProperties();
 
-function appendIdxToId(node, idx) {
-  node.id = node.id + "_" + idx;
-}
-
 /** @type HTMLInputElement */
 const new_property_name_node = document.getElementById("new_property_name");
 /** @type HTMLDivElement */
@@ -15,6 +11,11 @@ const properties_node = document.getElementById("properties");
 function appendToPropertyList(property) {
   const input = document.createElement("input");
   input.value = property.name;
+
+  input.oninput = (ev) => {
+    property.modify(ev.target.value);
+  };
+
   properties_node.append(input);
 }
 

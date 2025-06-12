@@ -64,11 +64,18 @@ const HttpContext = struct {
                 try respondJson(self.scratch.allocator(), connection, property);
             },
             .add_property => {
-                const params = try parseJsonBody(api.AddProperty, self.scratch.allocator(), body);
+                const params = try parseJsonBody(api.AddModifyProperty, self.scratch.allocator(), body);
                 try params.validate();
 
                 const property = try self.db.addProperty(params.name);
                 try respondJson(self.scratch.allocator(), connection, property);
+            },
+            .modify_property => |id| {
+                const params = try parseJsonBody(api.AddModifyProperty, self.scratch.allocator(), body);
+                try params.validate();
+
+                try self.db.modifyProperty(id, params.name);
+                try respondEmpty(connection);
             },
             .add_ingredient_property => {
                 const params = try parseJsonBody(api.AddIngredientPropertyParams, self.scratch.allocator(), body);
