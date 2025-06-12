@@ -128,32 +128,20 @@ function populateMealDishIngredientUnits(
   }
 }
 
-function appendMealDishIngredient(table, meal_dish, meal_dish_ingredient) {
+function appendMealDishIngredient(parent_div, meal_dish, meal_dish_ingredient) {
   const ingredient = ingredients.getById(meal_dish_ingredient.ingredient_id);
-  const new_row = document.createElement("tr");
 
-  const label_col = document.createElement("td");
-  label_col.classList.add("ingredient_label");
-  new_row.append(label_col);
-
-  const input_col = document.createElement("td");
-  new_row.append(input_col);
-
-  const unit_col = document.createElement("td");
-  new_row.append(unit_col);
-
-  const delete_col = document.createElement("td");
-  new_row.append(delete_col);
+  const fragment = document.createDocumentFragment();
 
   const label = document.createElement("a");
   label.innerText = ingredient.name;
   label.href = "/ingredient.html?id=" + ingredient.id;
-  label_col.append(label);
+  fragment.append(label);
 
   const input = document.createElement("input");
   input.type = "number";
   input.value = meal_dish_ingredient.quantity;
-  input_col.append(input);
+  fragment.append(input);
 
   const unit_select = document.createElement("select");
   populateMealDishIngredientUnits(
@@ -161,15 +149,20 @@ function appendMealDishIngredient(table, meal_dish, meal_dish_ingredient) {
     meal_dish_ingredient,
     ingredient,
   );
-  unit_col.append(unit_select);
+  fragment.append(unit_select);
 
   const delete_button = document.createElement("button");
-  delete_col.append(delete_button);
+  fragment.append(delete_button);
 
   delete_button.innerText = "Delete";
   delete_button.onclick = async () => {
     await meal_dish.removeIngredient(meal_dish_ingredient.id);
-    table.removeChild(new_row);
+
+    parent_div.removeChild(label);
+    parent_div.removeChild(input);
+    parent_div.removeChild(unit_select);
+    parent_div.removeChild(delete_button);
+
     if (meal_dish.ingredients().length === 0) {
       markIngredientNodeFresh(meal_dish_nodes.get(meal_dish.id()));
     }
@@ -188,8 +181,7 @@ function appendMealDishIngredient(table, meal_dish, meal_dish_ingredient) {
       input.value,
       unitDisplayToApi(unit_select.value),
     );
-
-  table.append(new_row);
+  parent_div.append(fragment);
 }
 
 async function updateMealDishIngredient(id, quantity, unit) {
@@ -321,12 +313,13 @@ function appendMealDish(meal_dish) {
   meal_content.classList.add("meal-content");
   div.append(meal_content);
 
-  const ingredient_table = document.createElement("table");
-  meal_content.append(ingredient_table);
+  const ingredient_div = document.createElement("div");
+  ingredient_div.classList.add("ingredients_table");
+  meal_content.append(ingredient_div);
   meal_content.append(makeAddIngredientDropdown(meal_dish));
 
   meal_dish.setIngredientCallback((mdi) => {
-    appendMealDishIngredient(ingredient_table, meal_dish, mdi);
+    appendMealDishIngredient(ingredient_div, meal_dish, mdi);
     console.log(meal_dish_id);
     markIngredientNodeModified(meal_dish_nodes.get(meal_dish_id));
   });
