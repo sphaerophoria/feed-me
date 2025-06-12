@@ -215,7 +215,11 @@ def test_meal(meal, today, timezone, summary, dish_ids, dish_ingredients=None):
             assert(dish["ingredients"] == [])
 
 
-    assert(meal["summary"] == summary);
+    assert(len(meal["summary"]) == len(summary))
+
+    for retrieved, expected in zip (meal["summary"], summary):
+        assert(abs(float(retrieved["value"]) - float(expected["value"])) < 1e-3)
+        assert(retrieved["property_id"] == expected["property_id"])
 
 def test_endpoints():
     egg = add_ingredient("egg")
@@ -234,7 +238,7 @@ def test_endpoints():
     options = [
             # Serving size 1 egg 50g
             [egg, calories, 70],
-            [egg, protein, 6],
+            [egg, protein, 6.1],
             [egg, fat, 5],
 
             # 2 slices 51g
@@ -271,7 +275,7 @@ def test_endpoints():
     test_ingredient(ingredients[0], egg["id"], 50, 0, 1, [
         [calories["id"], 70],
         [fat["id"], 5],
-        [protein["id"], 6],
+        [protein["id"], 6.1],
     ])
 
     test_ingredient(ingredients[1], bread["id"], 51, 0, 2, [
@@ -298,7 +302,7 @@ def test_endpoints():
     meal_1_expected_properties = [
         { "property_id": calories["id"], "value": 260 },
         { "property_id": fat["id"], "value": 11 },
-        { "property_id": protein["id"], "value": 17 },
+        { "property_id": protein["id"], "value": 17.2 },
     ]
 
     test_meal(meals[0], today, timezone, meal_1_expected_properties , [
@@ -307,9 +311,9 @@ def test_endpoints():
 
 
     meal_2_expected_properties = [
-        {'property_id': 1, 'value': 505},
-        {'property_id': 2, 'value': 22},
-        {'property_id': 3, 'value': 25}
+        {'property_id': calories["id"], 'value': 505},
+        {'property_id': fat["id"], 'value': 22.714},
+        {'property_id': protein["id"], 'value': 25.771}
     ]
 
     test_meal(meals[1], today, timezone, meal_2_expected_properties, [

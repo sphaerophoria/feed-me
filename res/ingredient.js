@@ -72,6 +72,7 @@ function updatePageWithIngredient(ingredient, properties) {
     const input = document.createElement("input");
     input.type = "number";
     input.min = 0;
+    input.step = "any";
     input.value = ingredient_property.value;
     const id = ingredient_property.id;
     input.onchange = (ev) => {

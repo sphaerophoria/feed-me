@@ -133,7 +133,7 @@ pub const IngredientProperty = struct {
     id: i64,
     ingredient_id: i64,
     property_id: i64,
-    value: i64,
+    value: api.FixedPointNumber,
 };
 
 pub const Ingredient = struct {
@@ -187,7 +187,7 @@ fn getIngredientProperties(self: *Db, leaky: std.mem.Allocator, ingredient_id: i
             .id = try statement.geti64(0),
             .ingredient_id = ingredient_id,
             .property_id = try statement.geti64(1),
-            .value = try statement.geti64(2),
+            .value = try statement.getFixedPointNum(2),
         });
     }
 
@@ -346,11 +346,11 @@ pub fn addIngredientProperty(self: *Db, params: api.AddIngredientPropertyParams)
         .id = sqlite.sqlite3_last_insert_rowid(self.db),
         .ingredient_id = params.ingredient_id,
         .property_id = params.property_id,
-        .value = 0,
+        .value = .fromFrac(0, 0),
     };
 }
 
-pub fn modifyIngredientProperty(self: *Db, id: i64, value: i64) !void {
+pub fn modifyIngredientProperty(self: *Db, id: i64, value: api.FixedPointNumber) !void {
     const statement = try Statement.init(
         self,
         "UPDATE ingredient_properties SET value = ?2 WHERE id = ?1",
@@ -358,7 +358,7 @@ pub fn modifyIngredientProperty(self: *Db, id: i64, value: i64) !void {
     defer statement.deinit();
 
     try statement.bindi64(1, id);
-    try statement.bindi64(2, value);
+    try statement.bindInt(2, value.toDbRepr());
 
     try statement.stepNoResult();
 }
@@ -413,7 +413,7 @@ pub fn getDishes(self: *Db, leaky: std.mem.Allocator) !sphtud.util.RuntimeSegmen
 
 pub const PropertySummary = struct {
     property_id: i64,
-    value: i64,
+    value: api.FixedPointNumber,
 };
 
 pub const Meal = struct {
@@ -584,13 +584,13 @@ fn getMealSummary(self: *Db, leaky: std.mem.Allocator, scratch: sphtud.alloc.Lin
 
     try statement.bindi64(1, meal_id);
 
-    var property_id_to_total = std.AutoHashMap(i64, i64).init(scratch.allocator());
+    var property_id_to_total = std.AutoHashMap(i64, f32).init(scratch.allocator());
     try property_id_to_total.ensureTotalCapacity(@intCast(self.typical_ingredient_properties));
 
     while (try statement.step()) {
-        const quantity = try statement.geti64(0);
+        const quantity: f32 = @floatFromInt(try statement.geti64(0));
         const unit = try statement.getUnitType(1);
-        const serving_amount = try statement.geti64(2);
+        const serving_amount = try statement.getFixedPointNum(2);
         const property_id = try statement.geti64(3);
 
         // ingredient_id, quantity, unit
@@ -600,7 +600,7 @@ fn getMealSummary(self: *Db, leaky: std.mem.Allocator, scratch: sphtud.alloc.Lin
             .pieces => try statement.geti64(6),
         };
 
-        const value = if (divisor == 0) -1 else @divTrunc(serving_amount * quantity, divisor);
+        const value = if (divisor == 0) -1 else serving_amount.toFloat() * quantity / @as(f32, @floatFromInt(divisor));
         const gop = try property_id_to_total.getOrPut(property_id);
         if (!gop.found_existing) {
             gop.value_ptr.* = 0;
@@ -618,7 +618,7 @@ fn getMealSummary(self: *Db, leaky: std.mem.Allocator, scratch: sphtud.alloc.Lin
     while (it.next()) |entry| {
         ret.append(.{
             .property_id = entry.key_ptr.*,
-            .value = entry.value_ptr.*,
+            .value = .fromf32(entry.value_ptr.*),
         }) catch unreachable;
     }
     return ret.items;
@@ -832,6 +832,11 @@ const Statement = struct {
 
     fn geti64(self: Statement, column: c_int) !i64 {
         return sqlite.sqlite3_column_int64(self.inner, column);
+    }
+
+    fn getFixedPointNum(self: Statement, column: c_int) !api.FixedPointNumber {
+        const ret = sqlite.sqlite3_column_int(self.inner, column);
+        return api.FixedPointNumber.fromDbRepr(ret);
     }
 
     fn getInt(self: Statement, column: c_int) !c_int {

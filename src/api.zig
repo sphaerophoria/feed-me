@@ -1,6 +1,87 @@
 const std = @import("std");
 const sphtud = @import("sphtud");
 
+pub const FixedPointNumber = packed struct(u32) {
+    integer: u22,
+
+    // 10^-3
+    // 999 = 0.999
+    fractional: u10,
+
+    pub fn fromf32(val: f32) FixedPointNumber {
+        return .{
+            .integer = @intFromFloat(@trunc(val)),
+            .fractional = @intFromFloat(@round(@mod(val, 1.0) * 1000)),
+        };
+    }
+
+    pub fn fromFrac(integer: u22, fractional: u10) FixedPointNumber {
+        std.debug.assert(fractional < 1000);
+        return .{
+            .integer = integer,
+            .fractional = fractional,
+        };
+    }
+
+    pub fn fromDbRepr(val: i32) !FixedPointNumber {
+        const ret: FixedPointNumber = @bitCast(val);
+        if (ret.fractional >= 1000) {
+            return error.InvalidFixedPointNumber;
+        }
+        return ret;
+    }
+
+    pub fn toDbRepr(self: FixedPointNumber) i32 {
+        return @bitCast(self);
+    }
+
+    pub fn toFloat(self: FixedPointNumber) f32 {
+        var ret: f32 = @floatFromInt(self.fractional);
+        std.debug.assert(self.fractional < 1000);
+        ret /= 1000;
+        ret += @floatFromInt(self.integer);
+        return ret;
+    }
+
+    pub fn jsonParse(
+        allocator: std.mem.Allocator,
+        source: anytype,
+        options: std.json.ParseOptions,
+    ) std.json.ParseError(@TypeOf(source.*))!FixedPointNumber {
+        _ = options;
+        const token: std.json.Token = try source.nextAlloc(allocator, .alloc_if_needed);
+        switch (token) {
+            .number, .allocated_number, .string, .allocated_string => |s| {
+                const decimal_pos = std.mem.indexOfScalar(u8, s, '.') orelse s.len;
+                const integer = try std.fmt.parseInt(u22, s[0..decimal_pos], 10);
+
+                const fractional_start = decimal_pos + 1;
+                // Only take first 3 decimals
+                const fractional_end = @min(s.len, fractional_start + 3);
+
+                const fractional = if (fractional_start < s.len) blk: {
+                    const parsed_decimal = try std.fmt.parseInt(u10, s[fractional_start..fractional_end], 10);
+                    // end - start == 3 -> * 1, 10^0
+                    // end - start == 2 -> * 10, 10^1
+                    // end - start == 1 -> * 100, 10^2
+                    const multiplier = try std.math.powi(u10, 10, @intCast(3 - (fractional_end - fractional_start)));
+                    break :blk parsed_decimal * multiplier;
+                } else 0;
+
+                return .{
+                    .integer = integer,
+                    .fractional = fractional,
+                };
+            },
+            else => return error.UnexpectedToken,
+        }
+    }
+
+    pub fn jsonStringify(self: FixedPointNumber, writer: anytype) !void {
+        try writer.print("{d}.{d:03}", .{ self.integer, self.fractional });
+    }
+};
+
 pub const AddIngredient = struct {
     name: []const u8,
 
@@ -25,10 +106,10 @@ pub const AddIngredientPropertyParams = struct {
 };
 
 pub const ModifyIngredientPropertyParams = struct {
-    value: i64,
+    value: FixedPointNumber,
 
     pub fn validate(self: ModifyIngredientPropertyParams) !void {
-        if (self.value < 0) return error.InvalidValue;
+        if (self.value.toFloat() < 0) return error.InvalidValue;
     }
 };
 
