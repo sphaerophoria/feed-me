@@ -19,9 +19,13 @@ async function addDish() {
 }
 
 function appendDish(dish) {
-  const a = document.createElement("div");
-  a.innerText = dish.name;
-  dishes_node.append(a);
+  const input = document.createElement("input");
+  input.value = dish.name;
+
+  input.oninput = (ev) => {
+    dish.modify(ev.target.value);
+  };
+  dishes_node.append(input);
 }
 
 async function init() {

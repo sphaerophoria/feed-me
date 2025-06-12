@@ -74,6 +74,29 @@ class Property {
   }
 }
 
+class Dish {
+  constructor(data) {
+    this.data = data;
+  }
+
+  get id() {
+    return this.data.id;
+  }
+
+  get name() {
+    return this.data.name;
+  }
+
+  modify(new_name) {
+    fetch("/dishes/" + this.id, {
+      method: "PUT",
+      body: JSON.stringify({
+        name: new_name,
+      }),
+    });
+  }
+}
+
 class MealDish {
   constructor(data) {
     this.new_ingredient_callback = null;
@@ -217,7 +240,7 @@ function makeProperties() {
 }
 
 function makeDishes() {
-  return new RemoteItemArray("/dishes");
+  return new RemoteItemArray("/dishes", Dish);
 }
 
 function makeMeals() {

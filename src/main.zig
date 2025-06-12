@@ -91,11 +91,18 @@ const HttpContext = struct {
                 try respondEmpty(connection);
             },
             .add_dish => {
-                const params = try parseJsonBody(api.AddDishParams, self.scratch.allocator(), body);
+                const params = try parseJsonBody(api.AddModifyDishParams, self.scratch.allocator(), body);
                 try params.validate();
 
                 const dish = try self.db.addDish(params.name);
                 try respondJson(self.scratch.allocator(), connection, dish);
+            },
+            .modify_dish => |id| {
+                const params = try parseJsonBody(api.AddModifyDishParams, self.scratch.allocator(), body);
+                try params.validate();
+
+                try self.db.modifyDish(id, params.name);
+                try respondEmpty(connection);
             },
             .get_dishes => {
                 const dishes = try self.db.getDishes(self.scratch.allocator());

@@ -140,10 +140,10 @@ pub const ModifyIngredientParams = struct {
     }
 };
 
-pub const AddDishParams = struct {
+pub const AddModifyDishParams = struct {
     name: []const u8,
 
-    pub fn validate(self: AddDishParams) !void {
+    pub fn validate(self: AddModifyDishParams) !void {
         if (self.name.len == 0) return error.InvalidName;
     }
 };
@@ -188,6 +188,7 @@ pub const Target = union(enum) {
     add_ingredient_property,
     modify_ingredient_property: i64,
     add_dish,
+    modify_dish: i64,
     get_dishes,
     redirect_to_index,
     add_meal,
@@ -273,6 +274,7 @@ pub const Target = union(enum) {
             },
             .PUT => {
                 switch (api) {
+                    .dishes => return .{ .modify_dish = id },
                     .properties => return .{ .modify_property = id },
                     .ingredients => return .{ .modify_ingredient = id },
                     .ingredient_properties => return .{ .modify_ingredient_property = id },

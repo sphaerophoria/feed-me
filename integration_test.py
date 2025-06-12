@@ -81,6 +81,16 @@ def add_dish(name):
     assert(dish is not None)
     return dish
 
+def get_dishes():
+    ret =  get_endpoint("/dishes")
+    ret.sort(key=lambda d: d["id"])
+    return ret
+
+def modify_dish(dish_id, name):
+    send_request("PUT", "/dishes/" + str(dish_id), {
+        "name": name,
+    })
+
 def add_meal(timestamp, timezone):
     meal = send_request("PUT", "/meals", {
         "timestamp_utc": timestamp,
@@ -263,6 +273,7 @@ def test_endpoints():
 
     egg_on_bread = add_dish("egg on bread")
     bread_and_cheese = add_dish("bread and cheese")
+    modify_dish(bread_and_cheese["id"], "breadd and cheese")
 
     # June 10, 2025 at whatever time I happened to get the timestamp, like,
     # 13:06 or something
@@ -360,6 +371,11 @@ def test_endpoints():
 
     assert(len(meals) == 1)
     assert(meals[0]["id"] == meal_1["id"])
+
+    dishes = get_dishes()
+    assert(len(dishes) == 2)
+    assert(dishes[0]["name"] == "egg on bread")
+    assert(dishes[1]["name"] == "breadd and cheese")
 
 
 def main(spawn_process):

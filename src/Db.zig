@@ -403,6 +403,18 @@ pub fn addDish(self: *Db, name: []const u8) !Dish {
     };
 }
 
+pub fn modifyDish(self: *Db, id: i64, name: []const u8) !void {
+    const statement = try Statement.init(
+        self,
+        "UPDATE dishes SET name = ?2 WHERE id = ?1",
+    );
+    defer statement.deinit();
+
+    try statement.bindi64(1, id);
+    try statement.bindText(2, name);
+    try statement.stepNoResult();
+}
+
 pub fn getDishes(self: *Db, leaky: std.mem.Allocator) !sphtud.util.RuntimeSegmentedList(Dish) {
     const statement = try Statement.init(self, "SELECT id, name FROM dishes;");
     defer statement.deinit();
