@@ -23,9 +23,8 @@ async function addIngredient() {
 async function init() {
   header.prependHeaderToBody();
 
-  ingredients.new_callback = appendToIngredientList;
-
   add_button.onclick = addIngredient;
+
   ingredient_name.onkeydown = (ev) => {
     if (ev.key === "Enter") {
       addIngredient();
@@ -33,6 +32,22 @@ async function init() {
   };
 
   await ingredients.initFromServer();
+
+  ingredients.items.sort((a, b) => {
+    if (a.name < b.name) {
+      return -1;
+    }
+    if (a.name > b.name) {
+      return 1;
+    }
+    return 0;
+  });
+
+  for (let ingredient of ingredients.items) {
+    appendToIngredientList(ingredient);
+  }
+
+  ingredients.new_callback = appendToIngredientList;
 }
 
 window.onload = init;
