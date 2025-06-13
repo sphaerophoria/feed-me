@@ -133,10 +133,17 @@ function appendMealDishIngredient(parent_div, meal_dish, meal_dish_ingredient) {
 
   const fragment = document.createDocumentFragment();
 
+  const first_grid_div = document.createElement("div");
+  fragment.append(first_grid_div);
+
+  const checkbox = document.createElement("input");
+  checkbox.type = "checkbox";
+  first_grid_div.append(checkbox);
+
   const label = document.createElement("a");
   label.innerText = ingredient.name;
   label.href = "/ingredient.html?id=" + ingredient.id;
-  fragment.append(label);
+  first_grid_div.append(label);
 
   const input = document.createElement("input");
   input.type = "number";
@@ -158,7 +165,7 @@ function appendMealDishIngredient(parent_div, meal_dish, meal_dish_ingredient) {
   delete_button.onclick = async () => {
     await meal_dish.removeIngredient(meal_dish_ingredient.id);
 
-    parent_div.removeChild(label);
+    parent_div.removeChild(first_grid_div);
     parent_div.removeChild(input);
     parent_div.removeChild(unit_select);
     parent_div.removeChild(delete_button);

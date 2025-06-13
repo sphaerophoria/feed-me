@@ -12,7 +12,7 @@
   margin-bottom: 1em;
 }
 
-.ingredients_table * {
+.ingredients_table > * {
   margin: 0px;
 }
 
