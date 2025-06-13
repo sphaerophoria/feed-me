@@ -6,13 +6,18 @@ async function modifyIngredient(id, params, properties) {
     method: "PUT",
     body: JSON.stringify(params),
   });
+
+  if (response.status != 200) {
+    throw new Error("Failed to modify ingredient");
+  }
+
   const ingredient = await response.json();
 
   updatePageWithIngredient(ingredient, properties);
 }
 
-/** @type HTMLHeadingElement */
-const title = document.getElementById("ingredient_name");
+/** @type HTMLInputElement */
+const title = document.getElementById("ingredient_name_edit");
 /** @type HTMLInputElement */
 const serving_size_g = document.getElementById("serving_size_g");
 /** @type HTMLInputElement */
@@ -52,7 +57,7 @@ function getProperty(properties, id) {
 }
 
 function updatePageWithIngredient(ingredient, properties) {
-  title.innerText = ingredient.name;
+  title.value = ingredient.name;
   serving_size_g.value = ingredient.serving_size_g;
   serving_size_ml.value = ingredient.serving_size_ml;
   serving_size_pieces.value = ingredient.serving_size_pieces;
@@ -156,6 +161,16 @@ async function init() {
     addProperty(id, properties, ev.target.selectedIndex);
     // Force it back to preview
     new_property.selectedIndex = 0;
+  };
+
+  title.oninput = (ev) => {
+    modifyIngredient(
+      id,
+      {
+        name: ev.target.value,
+      },
+      properties,
+    );
   };
 }
 
