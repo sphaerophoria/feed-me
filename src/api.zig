@@ -92,10 +92,22 @@ pub const AddIngredient = struct {
     }
 };
 
-pub const AddModifyProperty = struct {
+pub const AddProperty = struct {
+    parent_id: ?i64 = null,
     name: []const u8,
 
-    pub fn validate(self: AddModifyProperty) !void {
+    pub fn validate(self: AddProperty) !void {
+        const equivalent_modify = ModifyProperty{
+            .name = self.name,
+        };
+        try equivalent_modify.validate();
+    }
+};
+
+pub const ModifyProperty = struct {
+    name: []const u8,
+
+    pub fn validate(self: ModifyProperty) !void {
         if (self.name.len == 0) return error.InvalidName;
     }
 };

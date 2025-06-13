@@ -48,9 +48,10 @@ def set_ingredient_serving_sizes(ingredient_id, serving_size_g, serving_size_ml,
     })
 
 
-def add_property(name):
+def add_property(name, parent_id):
     p = send_request("PUT", "/properties", {
         "name": name,
+        "parent_id": parent_id,
     })
     assert(p is not None)
     return p
@@ -249,9 +250,10 @@ def test_endpoints():
     cream_cheese = add_ingredient("cream_cheese")
     set_ingredient_serving_sizes(cream_cheese["id"], 28, 0, 0)
 
-    calories = add_property("calories")
-    fat = add_property("fat")
-    protein = add_property("proteinn")
+    calories = add_property("calories", None)
+    fat = add_property("fat", None)
+    saturated_fat = add_property("saturated fat", fat["id"])
+    protein = add_property("protein_with_typo", None)
     modify_property(protein["id"], "protein")
 
     options = [
@@ -268,7 +270,8 @@ def test_endpoints():
             # 28g
             [cream_cheese, calories, 70],
             [cream_cheese, protein, 2],
-            [cream_cheese, fat, 6],
+            [cream_cheese, fat, 5],
+            [cream_cheese, saturated_fat, 1],
     ]
 
     for [ingredient, prop, value] in options:
@@ -306,16 +309,22 @@ def test_endpoints():
 
     test_ingredient(ingredients[2], cream_cheese["id"], 28, 0, 0, [
         [calories["id"], 70],
-        [fat["id"], 6],
+        [fat["id"], 5],
+        [saturated_fat["id"], 1],
         [protein["id"], 2],
     ])
 
     properties = sorted(get_properties(), key=lambda p: p["id"])
-    assert(len(properties) == 3)
+    assert(len(properties) == 4)
 
     assert(properties[0]["name"] == "calories")
+    assert(properties[0].get("parent_id", None) == None)
     assert(properties[1]["name"] == "fat")
-    assert(properties[2]["name"] == "protein")
+    assert(properties[1].get("parent_id", None) == None)
+    assert(properties[2]["name"] == "saturated fat")
+    assert(properties[2].get("parent_id", None) == fat["id"])
+    assert(properties[3]["name"] == "protein")
+    assert(properties[3].get("parent_id", None) == None)
 
     meals = get_meals()
 
@@ -329,10 +338,10 @@ def test_endpoints():
         egg_on_bread["id"]
     ])
 
-
     meal_2_expected_properties = [
         {'property_id': calories["id"], 'value': 505},
         {'property_id': fat["id"], 'value': 22.714},
+        {'property_id': saturated_fat["id"], 'value': 1.786},
         {'property_id': protein["id"], 'value': 25.771}
     ]
 

@@ -32,6 +32,11 @@ class RemoteItemArray {
       method: "PUT",
       body: params !== null ? JSON.stringify(params) : null,
     });
+
+    if (response.status != 200) {
+      throw new Error("Failed to add property");
+    }
+
     const json = await response.json();
     const item = this.ItemType !== undefined ? new this.ItemType(json) : json;
     this.items.push(item);
@@ -62,6 +67,10 @@ class Property {
 
   get name() {
     return this.data.name;
+  }
+
+  get parent_id() {
+    return this.data.parent_id;
   }
 
   modify(new_name) {

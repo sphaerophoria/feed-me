@@ -44,64 +44,30 @@ pub fn init(path: [:0]const u8) !Db {
     try cCheck(db, sqlite.sqlite3_open(path, &db));
     try cCheck(db, sqlite.sqlite3_exec(db, "PRAGMA foreign_keys = ON", null, null, null));
 
-    try cCheck(db, sqlite.sqlite3_exec(
-        db,
-        \\CREATE TABLE IF NOT EXISTS ingredients(
-        \\    id INTEGER PRIMARY KEY AUTOINCREMENT,
-        \\    name TEXT UNIQUE NOT NULL,
-        \\    serving_size_g INTEGER NOT NULL,
-        \\    serving_size_ml INTEGER NOT NULL,
-        \\    serving_size_pieces INTEGER NOT NULL
-        \\);
-        \\CREATE TABLE IF NOT EXISTS properties(
-        \\    id INTEGER PRIMARY KEY AUTOINCREMENT,
-        \\    name TEXT UNIQUE NOT NULL
-        \\);
-        \\CREATE TABLE IF NOT EXISTS ingredient_properties(
-        \\    id INTEGER PRIMARY KEY AUTOINCREMENT,
-        \\    ingredient_id INTEGER NOT NULL,
-        \\    property_id INTEGER NOT NULL,
-        \\    value INTEGER NOT NULL,
-        \\    FOREIGN KEY(ingredient_id) REFERENCES ingredients(id) ON DELETE CASCADE,
-        \\    FOREIGN KEY(property_id) REFERENCES properties(id) ON DELETE CASCADE,
-        \\    UNIQUE(ingredient_id, property_id)
-        \\);
-        \\CREATE TABLE IF NOT EXISTS dishes(
-        \\    id INTEGER PRIMARY KEY AUTOINCREMENT,
-        \\    name TEXT UNIQUE NOT NULL
-        \\);
-        \\CREATE TABLE IF NOT EXISTS meals(
-        \\    id INTEGER PRIMARY KEY AUTOINCREMENT,
-        \\    timestamp INTEGER NOT NULL,
-        \\    tz_offs_min INTEGER NOT NULL
-        \\);
-        \\CREATE TABLE IF NOT EXISTS meal_dishes(
-        \\    id INTEGER PRIMARY KEY AUTOINCREMENT,
-        \\    meal_id INTEGER NOT NULL,
-        \\    dish_id INTEGER NOT NULL,
-        \\    FOREIGN KEY(meal_id) REFERENCES meals(id) ON DELETE CASCADE,
-        \\    FOREIGN KEY(dish_id) REFERENCES dishes(id) ON DELETE CASCADE,
-        \\    UNIQUE(meal_id, dish_id)
-        \\);
-        \\CREATE TABLE IF NOT EXISTS meal_dish_ingredients(
-        \\    id INTEGER PRIMARY KEY AUTOINCREMENT,
-        \\    meal_dish_id INTEGER NOT NULL,
-        \\    ingredient_id INTEGER NOT NULL,
-        \\    quantity INTEGER NOT NULL,
-        \\    unit INTEGER NOT NULL,
-        \\    FOREIGN KEY(meal_dish_id) REFERENCES meal_dishes(id) ON DELETE CASCADE,
-        \\    FOREIGN KEY(ingredient_id) REFERENCES ingredients(id) ON DELETE CASCADE,
-        \\    UNIQUE(meal_dish_id, ingredient_id)
-        \\);
-    ,
-        null,
-        null,
-        null,
-    ));
-
-    return .{
+    var ret = Db{
         .db = db.?,
     };
+
+    const app_version = 1;
+    const version = try ret.userVersion();
+    if (version > app_version) {
+        return error.UnknownVersion;
+    }
+
+    const upgrade_funcs: []const *const fn (*Db) anyerror!void = &.{
+        initv1,
+    };
+
+    if (version < upgrade_funcs.len) {
+        for (upgrade_funcs[version..]) |f| {
+            try f(&ret);
+        }
+    }
+
+    const new_version = try ret.userVersion();
+    std.debug.assert(new_version == app_version);
+
+    return ret;
 }
 
 pub fn deinit(self: *Db) void {
@@ -224,6 +190,7 @@ pub fn getIngredients(self: *Db, leaky: std.mem.Allocator) !sphtud.util.RuntimeS
 pub const Property = struct {
     id: i64,
     name: []const u8,
+    parent_id: ?i64,
 };
 
 const SetParamsBuilder = struct {
@@ -291,7 +258,7 @@ pub fn modifyIngredient(self: *Db, leaky: std.mem.Allocator, id: i64, params: ap
 pub fn getProperties(self: *Db, leaky: std.mem.Allocator) !sphtud.util.RuntimeSegmentedList(Property) {
     const statement = try Statement.init(
         self,
-        "SELECT id, name FROM properties;",
+        "SELECT id, name, parent_id FROM properties;",
     );
     defer statement.deinit();
 
@@ -306,27 +273,35 @@ pub fn getProperties(self: *Db, leaky: std.mem.Allocator) !sphtud.util.RuntimeSe
         try ret.append(.{
             .id = try statement.geti64(0),
             .name = try statement.getText(leaky, 1),
+            .parent_id = try statement.getOptionali64(2),
         });
     }
 
     return ret;
 }
 
-pub fn addProperty(self: *Db, name: []const u8) !Property {
+pub fn addProperty(self: *Db, params: api.AddProperty) !Property {
     const statement = try Statement.init(
         self,
-        "INSERT INTO properties (name) VALUES(?1);",
+        "INSERT INTO properties (name, parent_id) VALUES(?1, ?2);",
     );
     defer statement.deinit();
 
-    try statement.bindText(1, name);
+    try statement.bindText(1, params.name);
+
+    if (params.parent_id) |parent_id| {
+        try statement.bindi64(2, parent_id);
+    } else {
+        try statement.bindNull(2);
+    }
 
     try statement.stepNoResult();
     const id = sqlite.sqlite3_last_insert_rowid(self.db);
 
     return .{
         .id = id,
-        .name = name,
+        .name = params.name,
+        .parent_id = params.parent_id,
     };
 }
 
@@ -590,6 +565,48 @@ fn ingredientById(ingredients: sphtud.util.RuntimeSegmentedList(Ingredient), id:
     return null;
 }
 
+fn getPropertyParentMappings(self: *Db, leaky: std.mem.Allocator) !std.AutoHashMap(i64, []i64) {
+    const properties = try self.getProperties(leaky);
+
+    var direct_parent_map = std.AutoHashMap(i64, ?i64).init(leaky);
+    try direct_parent_map.ensureTotalCapacity(@intCast(properties.len));
+
+    var property_it = properties.iter();
+    while (property_it.next()) |property| {
+        try direct_parent_map.put(property.id, property.parent_id);
+    }
+
+    var ret = std.AutoHashMap(i64, []i64).init(leaky);
+    try ret.ensureTotalCapacity(@intCast(properties.len));
+
+    property_it = properties.iter();
+    while (property_it.next()) |property| {
+        var parent_id = property.parent_id;
+        var property_parent_list = try sphtud.util.RuntimeBoundedArray(i64).init(
+            leaky,
+            // 5 depth is crazy big. Surely no nutrition label would look like
+            //
+            // A
+            //   B
+            //     C
+            //       D
+            //         E
+            //
+            // REMINDER: If this is not true, post a photo on discord
+            5,
+        );
+
+        try property_parent_list.append(property.id);
+        while (parent_id) |pid| {
+            try property_parent_list.append(pid);
+            parent_id = direct_parent_map.get(pid) orelse unreachable;
+        }
+        try ret.put(property.id, property_parent_list.items);
+    }
+
+    return ret;
+}
+
 fn getMealSummary(self: *Db, leaky: std.mem.Allocator, scratch: sphtud.alloc.LinearAllocator, meal_id: i64) ![]PropertySummary {
     const checkpoint = scratch.checkpoint();
     defer scratch.restore(checkpoint);
@@ -609,6 +626,8 @@ fn getMealSummary(self: *Db, leaky: std.mem.Allocator, scratch: sphtud.alloc.Lin
 
     try statement.bindi64(1, meal_id);
 
+    const property_parent_mappings = try self.getPropertyParentMappings(scratch.allocator());
+
     var property_id_to_total = std.AutoHashMap(i64, f32).init(scratch.allocator());
     try property_id_to_total.ensureTotalCapacity(@intCast(self.typical_ingredient_properties));
 
@@ -626,15 +645,19 @@ fn getMealSummary(self: *Db, leaky: std.mem.Allocator, scratch: sphtud.alloc.Lin
         };
 
         const value = if (divisor == 0) -1 else serving_amount.toFloat() * quantity / @as(f32, @floatFromInt(divisor));
-        const gop = try property_id_to_total.getOrPut(property_id);
-        if (!gop.found_existing) {
-            gop.value_ptr.* = 0;
-        }
 
-        if (value < 0) {
-            gop.value_ptr.* = -1;
-        } else {
-            gop.value_ptr.* += value;
+        const property_parent_list = property_parent_mappings.get(property_id) orelse unreachable;
+        for (property_parent_list) |addition_id| {
+            const gop = try property_id_to_total.getOrPut(addition_id);
+            if (!gop.found_existing) {
+                gop.value_ptr.* = 0;
+            }
+
+            if (value < 0) {
+                gop.value_ptr.* = -1;
+            } else {
+                gop.value_ptr.* += value;
+            }
         }
     }
 
@@ -889,6 +912,13 @@ const Statement = struct {
         try cCheck(self.db.db, sqlite.sqlite3_bind_int64(self.inner, column, val));
     }
 
+    fn bindNull(self: Statement, column: c_int) !void {
+        try cCheck(self.db.db, sqlite.sqlite3_bind_null(
+            self.inner,
+            column,
+        ));
+    }
+
     fn bindText(self: Statement, column: c_int, val: []const u8) !void {
         try cCheck(self.db.db, sqlite.sqlite3_bind_text(
             self.inner,
@@ -900,6 +930,12 @@ const Statement = struct {
     }
 
     fn geti64(self: Statement, column: c_int) !i64 {
+        return sqlite.sqlite3_column_int64(self.inner, column);
+    }
+
+    fn getOptionali64(self: Statement, column: c_int) !?i64 {
+        const t = sqlite.sqlite3_column_type(self.inner, column);
+        if (t == sqlite.SQLITE_NULL) return null;
         return sqlite.sqlite3_column_int64(self.inner, column);
     }
 
@@ -963,4 +999,90 @@ fn cCheck(db: ?*sqlite.sqlite3, ret: c_int) !void {
     }
 
     return err;
+}
+
+fn userVersion(db: *Db) !usize {
+    const statement = try Statement.init(
+        db,
+        "PRAGMA user_version",
+    );
+    defer statement.deinit();
+
+    try statement.stepExpectRow();
+    const ret = try statement.geti64(0);
+    if (ret < 0) {
+        return error.InvalidVersion;
+    }
+    return @intCast(ret);
+}
+
+fn initv1(db: *Db) !void {
+    try cCheck(db.db, sqlite.sqlite3_exec(
+        db.db,
+        \\CREATE TABLE IF NOT EXISTS ingredients(
+        \\    id INTEGER PRIMARY KEY AUTOINCREMENT,
+        \\    name TEXT UNIQUE NOT NULL,
+        \\    serving_size_g INTEGER NOT NULL,
+        \\    serving_size_ml INTEGER NOT NULL,
+        \\    serving_size_pieces INTEGER NOT NULL
+        \\);
+        \\CREATE TABLE IF NOT EXISTS properties(
+        \\    id INTEGER PRIMARY KEY AUTOINCREMENT,
+        \\    name TEXT UNIQUE NOT NULL
+        \\);
+        \\CREATE TABLE IF NOT EXISTS ingredient_properties(
+        \\    id INTEGER PRIMARY KEY AUTOINCREMENT,
+        \\    ingredient_id INTEGER NOT NULL,
+        \\    property_id INTEGER NOT NULL,
+        \\    value INTEGER NOT NULL,
+        \\    FOREIGN KEY(ingredient_id) REFERENCES ingredients(id) ON DELETE CASCADE,
+        \\    FOREIGN KEY(property_id) REFERENCES properties(id) ON DELETE CASCADE,
+        \\    UNIQUE(ingredient_id, property_id)
+        \\);
+        \\CREATE TABLE IF NOT EXISTS dishes(
+        \\    id INTEGER PRIMARY KEY AUTOINCREMENT,
+        \\    name TEXT UNIQUE NOT NULL
+        \\);
+        \\CREATE TABLE IF NOT EXISTS meals(
+        \\    id INTEGER PRIMARY KEY AUTOINCREMENT,
+        \\    timestamp INTEGER NOT NULL,
+        \\    tz_offs_min INTEGER NOT NULL
+        \\);
+        \\CREATE TABLE IF NOT EXISTS meal_dishes(
+        \\    id INTEGER PRIMARY KEY AUTOINCREMENT,
+        \\    meal_id INTEGER NOT NULL,
+        \\    dish_id INTEGER NOT NULL,
+        \\    FOREIGN KEY(meal_id) REFERENCES meals(id) ON DELETE CASCADE,
+        \\    FOREIGN KEY(dish_id) REFERENCES dishes(id) ON DELETE CASCADE,
+        \\    UNIQUE(meal_id, dish_id)
+        \\);
+        \\CREATE TABLE IF NOT EXISTS meal_dish_ingredients(
+        \\    id INTEGER PRIMARY KEY AUTOINCREMENT,
+        \\    meal_dish_id INTEGER NOT NULL,
+        \\    ingredient_id INTEGER NOT NULL,
+        \\    quantity INTEGER NOT NULL,
+        \\    unit INTEGER NOT NULL,
+        \\    FOREIGN KEY(meal_dish_id) REFERENCES meal_dishes(id) ON DELETE CASCADE,
+        \\    FOREIGN KEY(ingredient_id) REFERENCES ingredients(id) ON DELETE CASCADE,
+        \\    UNIQUE(meal_dish_id, ingredient_id)
+        \\);
+    ,
+        null,
+        null,
+        null,
+    ));
+
+    try db.upgradeV0V1();
+}
+
+fn upgradeV0V1(db: *Db) !void {
+    try cCheck(db.db, sqlite.sqlite3_exec(
+        db.db,
+        \\ALTER TABLE properties ADD COLUMN parent_id INTEGER DEFAULT NULL REFERENCES properties(id) ON DELETE CASCADE;
+        \\PRAGMA user_version = 1;
+    ,
+        null,
+        null,
+        null,
+    ));
 }
