@@ -131,6 +131,10 @@ const HttpContext = struct {
                 const meal_dish = try self.db.addMealDish(params);
                 try respondJson(self.scratch.allocator(), connection, meal_dish);
             },
+            .delete_meal_dish => |id| {
+                try self.db.deleteMealDish(id);
+                try respondEmpty(connection);
+            },
             .add_meal_dish_ingredient => {
                 const params = try parseJsonBody(api.AddMealDishIngredientParams, self.scratch.allocator(), body);
                 const meal_dish_ingredient = try self.db.addMealDishIngredient(params);

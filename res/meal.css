@@ -16,16 +16,6 @@
   margin: 0px;
 }
 
-@media (width < 35em) {
-  .ingredients_table {
-    grid-template-columns: auto;
-    row-gap: 0.25em;
-  }
-  .ingredients_table button {
-    margin-bottom: 1em;
-  }
-}
-
 input[type="number"] {
   width: 5em;
 }
@@ -36,4 +26,21 @@ input[type="number"] {
 
 .ingredients_added * .copy_dish {
   visibility: hidden;
+}
+
+.dish_buttons {
+  display: flex;
+}
+
+@media (width < 35em) {
+  .ingredients_table {
+    grid-template-columns: auto;
+    row-gap: 0.25em;
+  }
+  .ingredients_table button {
+    margin-bottom: 1em;
+  }
+  .dish_buttons {
+    display: unset;
+  }
 }

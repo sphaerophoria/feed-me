@@ -107,6 +107,9 @@ def add_meal_dish(meal_id, dish_id):
     assert(meal_dish is not None)
     return meal_dish
 
+def delete_meal_dish(meal_dish_id):
+    send_request("DELETE", "/meal_dishes/" + str(meal_dish_id), None)
+
 def add_meal_dish_ingredient(meal_dish_id, ingredient_id):
     meal_dish_ingredient = send_request("PUT", "/meal_dish_ingredients", {
         "meal_dish_id": meal_dish_id,
@@ -365,6 +368,12 @@ def test_endpoints():
         egg_on_bread_ingredients,
         bread_and_cheese_ingredients,
     ])
+
+    delete_meal_dish(meals[1]["dishes"][1]["id"])
+
+    meals = get_meals()
+    assert(len(meals[1]["dishes"]))
+    assert(meals[1]["dishes"][0]["dish_id"] == egg_on_bread["id"])
 
     delete_meal(meal_2["id"]);
     meals = get_meals()

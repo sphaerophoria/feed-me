@@ -306,7 +306,8 @@ function appendMealDish(meal_dish) {
   const div = document.createElement("div");
 
   const name = document.createElement("h2");
-  name.innerText = dishes.getById(meal_dish.dish_id()).name;
+  const dish_name = dishes.getById(meal_dish.dish_id()).name;
+  name.innerText = dish_name;
   div.append(name);
 
   const meal_content = document.createElement("div");
@@ -316,7 +317,23 @@ function appendMealDish(meal_dish) {
   const ingredient_div = document.createElement("div");
   ingredient_div.classList.add("ingredients_table");
   meal_content.append(ingredient_div);
-  meal_content.append(makeAddIngredientDropdown(meal_dish));
+
+  const dish_buttons_div = document.createElement("div");
+  dish_buttons_div.classList.add("dish_buttons");
+  meal_content.append(dish_buttons_div);
+
+  dish_buttons_div.append(makeAddIngredientDropdown(meal_dish));
+
+  const delete_dish = document.createElement("button");
+  delete_dish.innerText = "Delete " + dish_name;
+  delete_dish.onclick = async () => {
+    await meal.deleteDish(meal_dish_id);
+    meal_dish_nodes.delete(meal_dish_id);
+    div.remove();
+    updateSummary();
+  };
+
+  dish_buttons_div.append(delete_dish);
 
   meal_dish.setIngredientCallback((mdi) => {
     appendMealDishIngredient(ingredient_div, meal_dish, mdi);

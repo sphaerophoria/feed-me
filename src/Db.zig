@@ -684,6 +684,50 @@ pub fn addMealDish(self: *Db, params: api.AddMealDishParams) !MealDish {
     };
 }
 
+pub fn deleteMealDish(self: *Db, id: i64) !void {
+    const statement = try Statement.init(
+        self,
+        "DELETE FROM meal_dishes WHERE id = ?1",
+    );
+    defer statement.deinit();
+
+    try statement.bindi64(1, id);
+    try statement.stepNoResult();
+}
+
+test "deleteMealDish cascade" {
+    // Mostly covered by integration test, but here we want to ensure that the
+    // database state is as expected, which is not visible in the API
+
+    var db = try Db.init(":memory:");
+    const meal = try db.addMeal(.{
+        .timestamp_utc = 1234,
+        .tz_offs_min = -420,
+    });
+
+    const dish = try db.addDish("dish");
+
+    const meal_dish = try db.addMealDish(.{
+        .meal_id = meal.id,
+        .dish_id = dish.id,
+    });
+
+    const ingredient = try db.addIngredient("ingredient");
+
+    _ = try db.addMealDishIngredient(.{
+        .meal_dish_id = meal_dish.id,
+        .ingredient_id = ingredient.id,
+    });
+
+    try std.testing.expectEqual(1, try countTableEntries(&db, "meal_dishes"));
+    try std.testing.expectEqual(1, try countTableEntries(&db, "meal_dish_ingredients"));
+
+    try db.deleteMealDish(meal_dish.id);
+
+    try std.testing.expectEqual(0, try countTableEntries(&db, "meal_dishes"));
+    try std.testing.expectEqual(0, try countTableEntries(&db, "meal_dish_ingredients"));
+}
+
 const GetMealDishType = enum {
     with_ingredients,
     without_ingredients,

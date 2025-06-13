@@ -229,6 +229,23 @@ class Meal {
       this.on_new_dish(new_dish);
     }
   }
+
+  async deleteDish(meal_dish_id) {
+    const response = await fetch("/meal_dishes/" + meal_dish_id, {
+      method: "DELETE",
+    });
+
+    if (response.status != 200) {
+      throw new Error("Failed to remove dish");
+    }
+
+    for (let i = 0; i < this.data.dishes.length; i++) {
+      if (this.data.dishes[i].id() === meal_dish_id) {
+        this.data.dishes.splice(i, 1);
+        break;
+      }
+    }
+  }
 }
 
 function makeIngredients() {
