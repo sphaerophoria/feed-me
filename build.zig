@@ -26,6 +26,7 @@ const Builder = struct {
             .file = self.b.path("sqlite/sqlite3.c"),
         });
         module.addIncludePath(self.b.path("sqlite"));
+        module.link_libc = true;
     }
 };
 
