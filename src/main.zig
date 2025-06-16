@@ -90,6 +90,10 @@ const HttpContext = struct {
                 try self.db.modifyIngredientProperty(id, params.value);
                 try respondEmpty(connection);
             },
+            .delete_ingredient_property => |id| {
+                try self.db.deleteIngredientProperty(id);
+                try respondEmpty(connection);
+            },
             .add_dish => {
                 const params = try parseJsonBody(api.AddModifyDishParams, self.scratch.allocator(), body);
                 try params.validate();

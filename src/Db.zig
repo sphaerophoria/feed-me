@@ -135,7 +135,7 @@ pub fn getIngredient(self: *Db, id: i64, leaky: std.mem.Allocator) !Ingredient {
 fn getIngredientProperties(self: *Db, leaky: std.mem.Allocator, ingredient_id: i64) !sphtud.util.RuntimeSegmentedList(IngredientProperty) {
     const statement = try Statement.init(
         self,
-        "SELECT id, property_id, value FROM ingredient_properties WHERE ingredient_id = ?1;",
+        "SELECT id, property_id, value FROM ingredient_properties WHERE ingredient_id = ?1 ORDER BY id;",
     );
     defer statement.deinit();
 
@@ -347,6 +347,18 @@ pub fn modifyIngredientProperty(self: *Db, id: i64, value: api.FixedPointNumber)
 
     try statement.bindi64(1, id);
     try statement.bindInt(2, value.toDbRepr());
+
+    try statement.stepNoResult();
+}
+
+pub fn deleteIngredientProperty(self: *Db, id: i64) !void {
+    const statement = try Statement.init(
+        self,
+        "DELETE FROM ingredient_properties WHERE id = ?1",
+    );
+    defer statement.deinit();
+
+    try statement.bindi64(1, id);
 
     try statement.stepNoResult();
 }

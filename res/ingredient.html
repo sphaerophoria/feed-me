@@ -1,21 +1,28 @@
 <!doctype html>
 <html>
   <head>
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <link rel="stylesheet" href="/water.css" />
+    <link rel="stylesheet" href="/common.css" />
     <link rel="stylesheet" href="ingredient.css" />
     <script src="ingredient.js" defer="true" type="module"></script>
+    <script src="sphearch.js"></script>
   </head>
   <body>
     <input id="ingredient_name_edit" type="text" />
-    <label for="serving_size_g">Serving size (g)</label>
-    <input id="serving_size_g" type="number" min="0" />
-    <label for="serving_size_ml">Serving size (ml)</label>
-    <input id="serving_size_ml" type="number" min="0" />
-    <label for="serving_size_pieces">Serving size (pieces)</label>
-    <input id="serving_size_pieces" type="number" min="0" />
-    <br />
-    <div id="ingredient_properties"></div>
-    <select id="new_property"></select>
+    <div id="ingredient_values" class="common_grid">
+      <label for="serving_size_g">Serving size (g)</label>
+      <input id="serving_size_g" type="number" min="0" />
+      <label for="serving_size_ml">Serving size (ml)</label>
+      <input id="serving_size_ml" type="number" min="0" />
+      <label for="serving_size_pieces">Serving size (pieces)</label>
+      <input id="serving_size_pieces" type="number" min="0" />
+    </div>
+    <h2>Properties</h2>
+    <div id="ingredient_properties" class="common_grid"></div>
+    <sphearch-bar
+      id="new_property"
+      autoselect="true"
+      placeholder="Add a property..."
+    ></sphearch-bar>
   </body>
 </html>

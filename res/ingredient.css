@@ -4,3 +4,15 @@
   margin-top: 24px;
   margin-bottom: 12px;
 }
+
+#ingredient_values {
+  grid-template-columns: repeat(2, auto);
+}
+
+#ingredient_properties {
+  grid-template-columns: repeat(3, auto);
+}
+
+input[type="number"] {
+  width: 5em;
+}

@@ -257,6 +257,83 @@ class Meal {
   }
 }
 
+class Ingredient {
+  constructor(id) {
+    this.id = id;
+    this.data = {};
+    this.on_new_property = null;
+  }
+
+  async initFromServer() {
+    const response = await fetch("/ingredients/" + this.id);
+
+    if (response.status != 200) {
+      throw new Error("Failed to get ingredient");
+    }
+
+    this.data = await response.json();
+    if (this.on_new_property !== null) {
+      for (const ingredient_property of this.data.properties) {
+        this.on_new_property(ingredient_property);
+      }
+    }
+  }
+
+  async addProperty(property_id) {
+    const response = await fetch("/ingredient_properties", {
+      method: "PUT",
+      body: JSON.stringify({
+        ingredient_id: this.id,
+        property_id: property_id,
+      }),
+    });
+
+    if (response.status != 200) {
+      throw new Error("Failed to add ingredient property");
+    }
+
+    const new_property = await response.json();
+    this.data.properties.push(new_property);
+
+    if (this.on_new_property !== null) {
+      this.on_new_property(new_property);
+    }
+  }
+
+  async modifyIngredient(params) {
+    const response = await fetch("/ingredients/" + this.id, {
+      method: "PUT",
+      body: JSON.stringify(params),
+    });
+
+    if (response.status != 200) {
+      throw new Error("Failed to modify ingredient");
+    }
+
+    this.data = await response.json();
+  }
+
+  async deleteProperty(ingredient_property_id) {
+    const response = await fetch(
+      "/ingredient_properties/" + ingredient_property_id,
+      {
+        method: "DELETE",
+      },
+    );
+
+    if (response.status != 200) {
+      throw new Error("Failed to delete property");
+    }
+
+    for (let i = 0; i < this.data.properties.length; i++) {
+      if (this.data.properties[i].id === ingredient_property_id) {
+        this.data.properties.splice(i, 1);
+        break;
+      }
+    }
+  }
+}
+
 function makeIngredients() {
   return new RemoteItemArray("/ingredients");
 }
@@ -273,4 +350,11 @@ function makeMeals() {
   return new RemoteItemArray("/meals");
 }
 
-export { makeIngredients, makeProperties, makeDishes, makeMeals, Meal };
+export {
+  makeIngredients,
+  makeProperties,
+  makeDishes,
+  makeMeals,
+  Meal,
+  Ingredient,
+};

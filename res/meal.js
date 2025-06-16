@@ -323,6 +323,7 @@ function appendMealDish(meal_dish) {
 
   const ingredient_div = document.createElement("div");
   ingredient_div.classList.add("ingredients_table");
+  ingredient_div.classList.add("common_grid");
   meal_content.append(ingredient_div);
 
   const dish_buttons_div = document.createElement("div");

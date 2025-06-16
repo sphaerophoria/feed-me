@@ -1,20 +1,11 @@
 import * as header from "./header.js";
+import { Ingredient, makeProperties } from "./data.js";
 const url = new URL(window.location.href);
+import "./sphdelete-button.js";
 
-async function modifyIngredient(id, params, properties) {
-  const response = await fetch("/ingredients/" + id, {
-    method: "PUT",
-    body: JSON.stringify(params),
-  });
-
-  if (response.status != 200) {
-    throw new Error("Failed to modify ingredient");
-  }
-
-  const ingredient = await response.json();
-
-  updatePageWithIngredient(ingredient, properties);
-}
+const ingredient_id = url.searchParams.get("id");
+const ingredient = new Ingredient(ingredient_id);
+const properties = makeProperties();
 
 /** @type HTMLInputElement */
 const title = document.getElementById("ingredient_name_edit");
@@ -24,30 +15,34 @@ const serving_size_g = document.getElementById("serving_size_g");
 const serving_size_ml = document.getElementById("serving_size_ml");
 /** @type HTMLInputElement */
 const serving_size_pieces = document.getElementById("serving_size_pieces");
-/** @type HTMLSelectElement */
+/** @type Sphearch */
 const new_property = document.getElementById("new_property");
 /** @type HTMLDivElement */
-const ingredient_properties = document.getElementById("ingredient_properties");
+const ingredient_properties_node = document.getElementById(
+  "ingredient_properties",
+);
 
-function updatePageWithProperties(properties) {
-  new_property.innerHTML = "";
+function updatePageWithProperties() {
+  const property_names = properties.items.map((elem) => elem.name);
+  let out_properties = properties.items;
 
-  const preview_option = document.createElement("option");
-  preview_option.selected = true;
-  preview_option.disabled = true;
-  preview_option.hidden = true;
-  preview_option.innerText = "Add a property...";
+  new_property.search_results = (search) => {
+    out_properties = properties.items.filter((elem) =>
+      elem.name.includes(search),
+    );
+    return out_properties.map((elem) => elem.name);
+  };
 
-  new_property.append(preview_option);
-  for (const property of properties) {
-    const option = document.createElement("option");
-    option.innerText = property.name;
-    new_property.append(option);
-  }
+  new_property.on_select = async (idx) => {
+    await ingredient.addProperty(out_properties[idx].id);
+    new_property.clear();
+  };
+
+  new_property.setSearchResults(property_names);
 }
 
 function getProperty(properties, id) {
-  for (const property of properties) {
+  for (const property of properties.items) {
     if (id == property.id) {
       return property;
     }
@@ -56,121 +51,97 @@ function getProperty(properties, id) {
   return null;
 }
 
-function updatePageWithIngredient(ingredient, properties) {
-  title.value = ingredient.name;
-  serving_size_g.value = ingredient.serving_size_g;
-  serving_size_ml.value = ingredient.serving_size_ml;
-  serving_size_pieces.value = ingredient.serving_size_pieces;
+function updatePageWithIngredient() {
+  title.value = ingredient.data.name;
+  serving_size_g.value = ingredient.data.serving_size_g;
+  serving_size_ml.value = ingredient.data.serving_size_ml;
+  serving_size_pieces.value = ingredient.data.serving_size_pieces;
 
   // FIXME: createDoucumentFragment?
-
-  ingredient_properties.innerHTML = "";
-
-  for (const ingredient_property of ingredient.properties) {
-    const key_value_div = document.createElement("div");
-
-    const label = document.createElement("label");
-    const property = getProperty(properties, ingredient_property.property_id);
-    label.innerText = property.name;
-    key_value_div.append(label);
-
-    const input = document.createElement("input");
-    input.type = "number";
-    input.min = 0;
-    input.step = "any";
-    input.value = ingredient_property.value;
-    const id = ingredient_property.id;
-    input.onchange = (ev) => {
-      fetch("/ingredient_properties/" + id, {
-        method: "PUT",
-        body: JSON.stringify({
-          value: ev.target.value,
-        }),
-      });
-    };
-    key_value_div.append(input);
-
-    ingredient_properties.append(key_value_div);
-  }
 }
 
-async function addProperty(id, properties, selected_property) {
-  const property = properties[selected_property - 1];
-  console.log(property.id);
+function appendPropertyToList(ingredient_property) {
+  const key_value_div = document.createDocumentFragment();
 
-  await fetch("/ingredient_properties", {
-    method: "PUT",
-    body: JSON.stringify({
-      ingredient_id: id,
-      property_id: property.id,
-    }),
-  });
+  const delete_button = document.createElement("sphdelete-button");
+  delete_button.onclick = async () => {
+    await ingredient.deleteProperty(ingredient_property_id);
 
-  const response = await fetch("/ingredients/" + id);
-  const ingredient = await response.json();
-  updatePageWithIngredient(ingredient, properties);
+    ingredient_properties_node.removeChild(label);
+    ingredient_properties_node.removeChild(input);
+    ingredient_properties_node.removeChild(delete_button);
+  };
+  key_value_div.append(delete_button);
+
+  const label = document.createElement("label");
+  label.style.lineHeight = 1.0;
+  const property = getProperty(properties, ingredient_property.property_id);
+  label.innerText = property.name;
+  key_value_div.append(label);
+
+  const input = document.createElement("input");
+  input.type = "number";
+  input.min = 0;
+  input.step = "any";
+  input.value = ingredient_property.value;
+  const ingredient_property_id = ingredient_property.id;
+  input.onchange = (ev) => {
+    fetch("/ingredient_properties/" + ingredient_property_id, {
+      method: "PUT",
+      body: JSON.stringify({
+        value: ev.target.value,
+      }),
+    });
+  };
+
+  input.onfocus = (ev) => {
+    ev.target.select();
+  };
+
+  key_value_div.append(input);
+
+  ingredient_properties_node.append(key_value_div);
+
+  input.focus();
 }
 
 async function init() {
   header.prependHeaderToBody();
-  const id = url.searchParams.get("id");
-  const ingredient_promise = fetch("/ingredients/" + id).then((response) =>
-    response.json(),
-  );
-  const properties_promise = fetch("/properties").then((response) =>
-    response.json(),
-  );
 
-  const [ingredient, properties] = await Promise.all([
-    ingredient_promise,
-    properties_promise,
-  ]);
+  await Promise.all([ingredient.initFromServer(), properties.initFromServer()]);
 
-  console.log(properties);
-  updatePageWithProperties(properties);
-  updatePageWithIngredient(ingredient, properties);
+  for (const ingredient_property of ingredient.data.properties) {
+    appendPropertyToList(ingredient_property);
+  }
+
+  ingredient.on_new_property = appendPropertyToList;
+
+  updatePageWithProperties();
+  updatePageWithIngredient();
 
   serving_size_g.oninput = (ev) =>
-    modifyIngredient(
-      id,
-      {
-        serving_size_g: ev.target.value,
-      },
-      properties,
-    );
+    ingredient.modifyIngredient({
+      serving_size_g: ev.target.value,
+    });
 
   serving_size_ml.oninput = (ev) =>
-    modifyIngredient(
-      id,
-      {
-        serving_size_ml: ev.target.value,
-      },
-      properties,
-    );
+    ingredient.modifyIngredient({
+      serving_size_ml: ev.target.value,
+    });
 
   serving_size_pieces.oninput = (ev) =>
-    modifyIngredient(
-      id,
-      {
-        serving_size_pieces: ev.target.value,
-      },
-      properties,
-    );
-
-  new_property.onchange = (ev) => {
-    addProperty(id, properties, ev.target.selectedIndex);
-    // Force it back to preview
-    new_property.selectedIndex = 0;
-  };
+    ingredient.modifyIngredient({
+      serving_size_pieces: ev.target.value,
+    });
 
   title.oninput = (ev) => {
-    modifyIngredient(
-      id,
-      {
-        name: ev.target.value,
-      },
-      properties,
-    );
+    ingredient.modifyIngredient({
+      name: ev.target.value,
+    });
+  };
+
+  new_property.oninput = (ev) => {
+    ev.target.scrollIntoView();
   };
 }
 

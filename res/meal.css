@@ -3,21 +3,7 @@
 }
 
 .ingredients_table {
-  display: grid;
-  width: fit-content;
   grid-template-columns: repeat(4, auto);
-  column-gap: 1em;
-  row-gap: 0.5em;
-  align-items: center;
-  margin-bottom: 1em;
-}
-
-.ingredients_table > * {
-  margin: 0px;
-}
-
-input[type="number"] {
-  width: 5em;
 }
 
 .ingredient_label {
