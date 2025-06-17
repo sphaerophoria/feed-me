@@ -169,7 +169,8 @@ sheet.replaceSync(
   }
 
   .search_highlight {
-    background: #5555ff;
+    /* From water.css */
+    background: var(--selection);
   }
   `,
 );
