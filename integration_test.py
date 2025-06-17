@@ -2,6 +2,7 @@
 
 import time
 import tempfile
+import copy
 import subprocess
 import signal
 import json
@@ -39,6 +40,40 @@ def add_ingredient(name):
     assert(ingredient is not None)
     return ingredient
 
+def add_ingredient_category(ingredient_id, name):
+    body = {}
+    if (name is not None):
+        body["name"] = name
+
+    if (ingredient_id is not None):
+        body["ingredient_id"] = ingredient_id
+
+    category = send_request("PUT", "/ingredient_categories", body)
+    assert (category is not None)
+    return category
+
+def add_ingredient_to_category(ingredient_id, category_id):
+    send_request("PUT", "/ingredient_category_mappings", {
+        "ingredient_id": ingredient_id,
+        "category_id": category_id,
+    })
+
+def get_ingredient_category(category_id):
+    category = send_request("GET", "/ingredient_categories/" + str(category_id), None)
+    assert (category is not None)
+    return category
+
+def delete_ingredient_category_mapping(mapping_id):
+    category = send_request("DELETE", "/ingredient_category_mappings/" + str(mapping_id), None)
+
+def get_ingredient_categories():
+    categories = send_request("GET", "/ingredient_categories", None)
+    assert (categories is not None)
+    categories.sort(key=lambda c: c["id"])
+    return categories
+
+def modify_ingredient_category(category_id, params):
+    send_request("PUT", "/ingredient_categories/" + str(category_id), params)
 
 def set_ingredient_serving_sizes(ingredient_id, serving_size_g, serving_size_ml, serving_size_pieces):
     send_request("PUT", "/ingredients/" + str(ingredient_id), {
@@ -133,11 +168,14 @@ def get_endpoint(endpoint):
 def get_ingredients():
     ret =  send_request("GET", "/ingredients", None)
     assert(ret is not None)
+    for ingredient in ret:
+        ingredient["category_mappings"].sort(key=lambda c: c["id"])
     return ret
 
 def get_ingredient(id):
     ret =  send_request("GET", "/ingredients/" + str(id), None)
     assert(ret is not None)
+    ret["category_mappings"].sort(key=lambda c: c["id"])
     return ret
 
 def get_properties():
@@ -162,22 +200,19 @@ def get_meal(meal_id):
 def delete_meal(meal_id):
     send_request("DELETE", "/meals/" + str(meal_id), None)
 
-def test_ingredient(ingredient, expected_id, expected_ss_g, expected_ss_ml, expected_ss_pieces, expected_properties):
-    common_tests = [
-            ["id", expected_id],
-            ["serving_size_g", expected_ss_g],
-            ["serving_size_ml", expected_ss_ml],
-            ["serving_size_pieces", expected_ss_pieces],
-    ]
+def test_ingredient(ingredient, expected_id, expected_ss_g, expected_ss_ml, expected_ss_pieces, expected_categories, expected_properties):
     assert("properties" not in ingredient)
 
-    for key, value in common_tests:
-        assert(ingredient[key] == value)
-
     ingredient_w_properties = get_ingredient(expected_id)
+    assert(ingredient_w_properties["id"] == expected_id)
+    assert(ingredient_w_properties["serving_size_g"] == expected_ss_g)
+    assert(ingredient_w_properties["serving_size_ml"] == expected_ss_ml)
+    assert(ingredient_w_properties["serving_size_pieces"] == expected_ss_pieces)
 
-    for key, value in common_tests:
-        assert(ingredient_w_properties[key] == value)
+    for expected_category_id, mapping in zip(expected_categories, ingredient_w_properties["category_mappings"]):
+        assert(expected_category_id == mapping["ingredient_category_id"])
+
+    assert(len(ingredient_w_properties["category_mappings"]) == len(expected_categories))
 
     sorted_props = sorted(ingredient_w_properties["properties"], key=lambda p: p["property_id"])
 
@@ -185,6 +220,9 @@ def test_ingredient(ingredient, expected_id, expected_ss_g, expected_ss_ml, expe
         assert(actual["ingredient_id"] == expected_id)
         assert(actual["property_id"] == expected[0])
         assert(actual["value"] == expected[1])
+
+    del ingredient_w_properties["properties"]
+    assert(ingredient_w_properties == ingredient)
 
 def init_meal_1(today, timezone, egg_on_bread, egg, bread):
     meal_1 = add_meal(today, timezone)
@@ -240,6 +278,11 @@ def test_meal(meal, today, timezone, summary, dish_ids, dish_ingredients=None):
         assert(abs(float(retrieved["value"]) - float(expected["value"])) < 1e-3)
         assert(retrieved["property_id"] == expected["property_id"])
 
+def removed_mappings(item):
+    ret = copy.deepcopy(item)
+    del ret["mappings"]
+    return ret
+
 def test_endpoints():
     egg = add_ingredient("egg")
     set_ingredient_serving_sizes(egg["id"], 50, 0, 1)
@@ -247,8 +290,17 @@ def test_endpoints():
     bread = add_ingredient("bread")
     set_ingredient_serving_sizes(bread["id"], 51, 0, 2)
 
+    bread_category = add_ingredient_category(bread["id"], None);
+    other_category = add_ingredient_category(None, "test category w/ typo");
+    modify_ingredient_category(other_category["id"], {
+        "name": "test category",
+    })
+
     cream_cheese = add_ingredient("cream_cheese")
     set_ingredient_serving_sizes(cream_cheese["id"], 28, 0, 0)
+
+    bagel = add_ingredient("bagel")
+    add_ingredient_to_category(bagel["id"], bread_category["id"])
 
     calories = add_property("calories", None)
     fat = add_property("fat", None)
@@ -292,27 +344,47 @@ def test_endpoints():
 
     ingredients = sorted(get_ingredients(), key=lambda i: i["id"])
 
-    if len(ingredients) != 3:
+    if len(ingredients) != 4:
         raise RuntimeError("Unexpected number of ingredients")
 
-    test_ingredient(ingredients[0], egg["id"], 50, 0, 1, [
+    test_ingredient(ingredients[0], egg["id"], 50, 0, 1, [], [
         [calories["id"], 70],
         [fat["id"], 5],
         [protein["id"], 6.1],
     ])
 
-    test_ingredient(ingredients[1], bread["id"], 51, 0, 2, [
+    test_ingredient(ingredients[1], bread["id"], 51, 0, 2, [bread_category["id"]], [
         [calories["id"], 120],
         [fat["id"], 1],
         [protein["id"], 5],
     ])
 
-    test_ingredient(ingredients[2], cream_cheese["id"], 28, 0, 0, [
+    test_ingredient(ingredients[2], cream_cheese["id"], 28, 0, 0, [], [
         [calories["id"], 70],
         [fat["id"], 5],
         [saturated_fat["id"], 1],
         [protein["id"], 2],
     ])
+
+    # idgaf about the bagel, it has no parameters set
+
+    assert bread_category["name"] == "bread"
+    assert other_category["name"] == "test category w/ typo"
+
+    retrieved_bread_category = get_ingredient_category(bread_category["id"])
+    assert(retrieved_bread_category["id"] == bread_category["id"])
+    assert(retrieved_bread_category["name"] == "bread")
+    assert(len(retrieved_bread_category["mappings"]) == 2)
+    assert(retrieved_bread_category["mappings"][0]["ingredient_id"] == bread["id"])
+    assert(retrieved_bread_category["mappings"][1]["ingredient_id"] == bagel["id"])
+
+    retrieved_other_category = get_ingredient_category(other_category["id"])
+    assert(retrieved_other_category["name"] == "test category")
+
+    retrieved_ingredient_categories = get_ingredient_categories();
+    assert(len(retrieved_ingredient_categories) == 2)
+    assert(retrieved_ingredient_categories[0] == removed_mappings(retrieved_bread_category))
+    assert(retrieved_ingredient_categories[1] == removed_mappings(retrieved_other_category))
 
     properties = sorted(get_properties(), key=lambda p: p["id"])
     assert(len(properties) == 4)
@@ -394,6 +466,11 @@ def test_endpoints():
     assert(len(dishes) == 2)
     assert(dishes[0]["name"] == "egg on bread")
     assert(dishes[1]["name"] == "breadd and cheese")
+
+    delete_ingredient_category_mapping(retrieved_bread_category["mappings"][1]["id"])
+    new_bread_category = get_ingredient_category(bread_category["id"])
+    assert(len(new_bread_category["mappings"]) ==  1)
+    assert(new_bread_category["mappings"][0]["ingredient_id"] ==  bread["id"])
 
 
 def main(spawn_process):

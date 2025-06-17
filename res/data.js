@@ -334,6 +334,83 @@ class Ingredient {
   }
 }
 
+class IngredientCategory {
+  constructor(id) {
+    this.id = id;
+    this.data = {};
+    this.on_new_ingredient = null;
+  }
+
+  async initFromServer() {
+    const response = await fetch(this.makeUrl());
+
+    if (response.status != 200) {
+      throw new Error("Failed to get ingredient category");
+    }
+
+    this.data = await response.json();
+  }
+
+  async modify(params) {
+    const response = await fetch(this.makeUrl(), {
+      method: "PUT",
+      body: JSON.stringify(params),
+    });
+
+    if (response.status != 200) {
+      throw new Error("Failed to update ingredient category");
+    }
+
+    for (const [key, value] in params) {
+      this.data[key] = value;
+    }
+  }
+
+  async addIngredient(ingredient_id) {
+    const response = await fetch("/ingredient_category_mappings", {
+      method: "PUT",
+      body: JSON.stringify({
+        category_id: this.id,
+        ingredient_id: ingredient_id,
+      }),
+    });
+
+    if (response.status != 200) {
+      throw new Error("Failed to add ingredient to category");
+    }
+
+    const json = await response.json();
+    this.data.mappings.push(json);
+    if (this.on_new_ingredient) {
+      this.on_new_ingredient(json);
+    }
+  }
+
+  async deleteMapping(mapping_id) {
+    const response = await fetch(
+      "/ingredient_category_mappings/" + mapping_id,
+      {
+        method: "DELETE",
+      },
+    );
+
+    if (response.status != 200) {
+      throw new Error("Failed to remove ingredient from category");
+    }
+
+    for (let i = 0; i < this.data.mappings.length; i++) {
+      if (this.data.mappings[i].id === mapping_id) {
+        this.data.mappings.splice(i, 1);
+        break;
+      }
+    }
+  }
+
+  makeUrl() {
+    return "/ingredient_categories/" + this.id;
+  }
+}
+
 function makeIngredients() {
   return new RemoteItemArray("/ingredients");
 }
@@ -350,11 +427,17 @@ function makeMeals() {
   return new RemoteItemArray("/meals");
 }
 
+function makeIngredientCategories() {
+  return new RemoteItemArray("/ingredient_categories");
+}
+
 export {
   makeIngredients,
   makeProperties,
   makeDishes,
   makeMeals,
+  makeIngredientCategories,
   Meal,
   Ingredient,
+  IngredientCategory,
 };

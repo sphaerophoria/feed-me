@@ -39,6 +39,17 @@ max_num_meal_dishes: usize = 1000,
 // If I put 1000 ingredients in something, wtf am i doing?
 max_num_meal_dish_ingredeints: usize = 1000,
 
+// How many types of bread could I possibly buy?
+// In reality probably ~3, 10 is an overestimate, 100 would be insane, 10x for
+// safety
+typical_category_ingredients: usize = 10,
+max_category_ingredients: usize = 1000,
+
+// Most things will be in one category, some might be in a few, 10x and round
+// up to order of magnitude
+typical_ingredient_category_mappings: usize = 1,
+max_ingredient_category_mappings: usize = 100,
+
 pub fn init(path: [:0]const u8) !Db {
     var db: ?*sqlite.sqlite3 = null;
     try cCheck(db, sqlite.sqlite3_open(path, &db));
@@ -48,7 +59,7 @@ pub fn init(path: [:0]const u8) !Db {
         .db = db.?,
     };
 
-    const app_version = 1;
+    const app_version = 2;
     const version = try ret.userVersion();
     if (version > app_version) {
         return error.UnknownVersion;
@@ -56,6 +67,7 @@ pub fn init(path: [:0]const u8) !Db {
 
     const upgrade_funcs: []const *const fn (*Db) anyerror!void = &.{
         initv1,
+        upgradeV1V2,
     };
 
     if (version < upgrade_funcs.len) {
@@ -92,6 +104,7 @@ pub fn addIngredient(self: *Db, name: []const u8) !Ingredient {
         .serving_size_g = 0,
         .serving_size_ml = 0,
         .serving_size_pieces = 0,
+        .category_mappings = .empty,
     };
 }
 
@@ -102,12 +115,19 @@ pub const IngredientProperty = struct {
     value: api.FixedPointNumber,
 };
 
+pub const IngredientCategoryMapping = struct {
+    id: i64,
+    ingredient_id: i64,
+    ingredient_category_id: i64,
+};
+
 pub const Ingredient = struct {
     id: i64,
     name: []const u8,
     serving_size_g: i64,
     serving_size_ml: i64,
     serving_size_pieces: i64,
+    category_mappings: sphtud.util.RuntimeSegmentedList(IngredientCategoryMapping),
     // Only set on individual ingredient return
     properties: ?sphtud.util.RuntimeSegmentedList(IngredientProperty) = null,
 };
@@ -128,8 +148,36 @@ pub fn getIngredient(self: *Db, id: i64, leaky: std.mem.Allocator) !Ingredient {
         .serving_size_g = try statement.geti64(1),
         .serving_size_ml = try statement.geti64(2),
         .serving_size_pieces = try statement.geti64(3),
+        .category_mappings = try self.getCategoriesForIngredient(leaky, id),
         .properties = try self.getIngredientProperties(leaky, id),
     };
+}
+
+fn getCategoriesForIngredient(self: *Db, leaky: std.mem.Allocator, ingredient_id: i64) !sphtud.util.RuntimeSegmentedList(IngredientCategoryMapping) {
+    const statement = try Statement.init(
+        self,
+        "SELECT id, category_id FROM ingredient_category_mapping WHERE ingredient_id = ?1 ORDER BY id;",
+    );
+    defer statement.deinit();
+
+    try statement.bindi64(1, ingredient_id);
+
+    var ret = try sphtud.util.RuntimeSegmentedList(IngredientCategoryMapping).init(
+        leaky,
+        leaky,
+        self.typical_ingredient_category_mappings,
+        self.max_ingredient_category_mappings,
+    );
+
+    while (try statement.step()) {
+        try ret.append(.{
+            .id = try statement.geti64(0),
+            .ingredient_id = ingredient_id,
+            .ingredient_category_id = try statement.geti64(1),
+        });
+    }
+
+    return ret;
 }
 
 fn getIngredientProperties(self: *Db, leaky: std.mem.Allocator, ingredient_id: i64) !sphtud.util.RuntimeSegmentedList(IngredientProperty) {
@@ -175,12 +223,14 @@ pub fn getIngredients(self: *Db, leaky: std.mem.Allocator) !sphtud.util.RuntimeS
     );
 
     while (try statement.step()) {
+        const ingredient_id = try statement.geti64(0);
         try ret.append(.{
-            .id = try statement.geti64(0),
+            .id = ingredient_id,
             .name = try statement.getText(leaky, 1),
             .serving_size_g = try statement.geti64(2),
             .serving_size_ml = try statement.geti64(3),
             .serving_size_pieces = try statement.geti64(4),
+            .category_mappings = try self.getCategoriesForIngredient(leaky, ingredient_id),
         });
     }
 
@@ -849,6 +899,178 @@ pub fn deleteMealDishIngredient(self: *Db, id: i64) !void {
     try statement.stepNoResult();
 }
 
+const IngredientCategory = struct {
+    id: i64,
+    name: []const u8,
+    // Only retrieved in specific page
+    mappings: ?sphtud.util.RuntimeSegmentedList(IngredientCategoryMapping),
+};
+
+pub fn addIngredientCategory(self: *Db, leaky: std.mem.Allocator, params: api.AddIngredientCategoryParams) !IngredientCategory {
+    try cCheck(self.db, sqlite.sqlite3_exec(self.db, "BEGIN TRANSACTION;", null, null, null));
+    errdefer {
+        _ = sqlite.sqlite3_exec(self.db, "ROLLBACK TRANSACTION;", null, null, null);
+    }
+
+    // Add category
+    {
+        if (params.name) |name| {
+            const statement = try Statement.init(
+                self,
+                "INSERT INTO ingredient_categories (name) VALUES (?1)",
+            );
+            defer statement.deinit();
+
+            try statement.bindText(1, name);
+            try statement.stepNoResult();
+        } else if (params.ingredient_id) |ingredient_id| {
+            const statement = try Statement.init(
+                self,
+                "INSERT INTO ingredient_categories (name) SELECT name FROM ingredients WHERE id = ?1",
+            );
+            defer statement.deinit();
+
+            try statement.bindi64(1, ingredient_id);
+            try statement.stepNoResult();
+        } else unreachable;
+    }
+
+    const category_id = sqlite.sqlite3_last_insert_rowid(self.db);
+
+    if (params.ingredient_id) |ingredient_id| {
+        const statement = try Statement.init(
+            self,
+            "INSERT INTO ingredient_category_mapping (ingredient_id, category_id) VALUES (?1, ?2)",
+        );
+        defer statement.deinit();
+
+        try statement.bindi64(1, ingredient_id);
+        try statement.bindi64(2, category_id);
+        try statement.stepNoResult();
+    }
+
+    try cCheck(self.db, sqlite.sqlite3_exec(self.db, "COMMIT TRANSACTION", null, null, null));
+
+    return try self.getIngredientCategory(leaky, category_id);
+}
+
+pub fn getIngredientCategory(self: *Db, leaky: std.mem.Allocator, id: i64) !IngredientCategory {
+    const statement = try Statement.init(
+        self,
+        "SELECT name FROM ingredient_categories WHERE id = ?1",
+    );
+    defer statement.deinit();
+
+    try statement.bindi64(1, id);
+
+    try statement.stepExpectRow();
+    const name = try statement.getText(leaky, 0);
+
+    return .{
+        .id = id,
+        .name = name,
+        .mappings = try self.getIngredientCategoryIngredients(leaky, id),
+    };
+}
+
+pub fn getIngredientCategories(self: *Db, leaky: std.mem.Allocator) !sphtud.util.RuntimeSegmentedList(IngredientCategory) {
+    const statement = try Statement.init(
+        self,
+        "SELECT id, name FROM ingredient_categories",
+    );
+    defer statement.deinit();
+
+    var ret = try sphtud.util.RuntimeSegmentedList(IngredientCategory).init(
+        leaky,
+        leaky,
+        self.typical_num_ingredients,
+        self.max_num_ingredients,
+    );
+
+    while (try statement.step()) {
+        try ret.append(.{
+            .id = try statement.geti64(0),
+            .name = try statement.getText(leaky, 1),
+            .mappings = null,
+        });
+    }
+
+    return ret;
+}
+
+pub fn modifyIngredientCategory(self: *Db, id: i64, params: api.ModifyIngredientCategoryParams) !void {
+    const statement = try Statement.init(
+        self,
+        "UPDATE ingredient_categories SET name = ?2 WHERE id = ?1",
+    );
+    defer statement.deinit();
+
+    try statement.bindi64(1, id);
+    try statement.bindText(2, params.name);
+
+    try statement.stepNoResult();
+}
+
+pub fn addIngredientCategoryMapping(self: *Db, params: api.AddIngredientCategoryMapping) !IngredientCategoryMapping {
+    const statement = try Statement.init(
+        self,
+        "INSERT INTO ingredient_category_mapping (ingredient_id, category_id) VALUES (?1, ?2)",
+    );
+    defer statement.deinit();
+
+    try statement.bindi64(1, params.ingredient_id);
+    try statement.bindi64(2, params.category_id);
+
+    try statement.stepNoResult();
+
+    const id = sqlite.sqlite3_last_insert_rowid(self.db);
+
+    return .{
+        .id = id,
+        .ingredient_id = params.ingredient_id,
+        .ingredient_category_id = params.category_id,
+    };
+}
+
+pub fn deleteIngredientCategoryMapping(self: *Db, id: i64) !void {
+    const statement = try Statement.init(
+        self,
+        "DELETE FROM ingredient_category_mapping WHERE id = ?1",
+    );
+    defer statement.deinit();
+
+    try statement.bindi64(1, id);
+
+    try statement.stepNoResult();
+}
+
+pub fn getIngredientCategoryIngredients(self: *Db, leaky: std.mem.Allocator, id: i64) !sphtud.util.RuntimeSegmentedList(IngredientCategoryMapping) {
+    const statement = try Statement.init(
+        self,
+        "SELECT id, ingredient_id FROM ingredient_category_mapping WHERE category_id = ?1",
+    );
+    defer statement.deinit();
+
+    try statement.bindi64(1, id);
+
+    var ret = try sphtud.util.RuntimeSegmentedList(IngredientCategoryMapping).init(
+        leaky,
+        leaky,
+        self.typical_category_ingredients,
+        self.max_category_ingredients,
+    );
+
+    while (try statement.step()) {
+        try ret.append(.{
+            .id = try statement.geti64(0),
+            .ingredient_id = try statement.geti64(1),
+            .ingredient_category_id = id,
+        });
+    }
+
+    return ret;
+}
+
 pub fn copyMealDish(self: *Db, leaky: std.mem.Allocator, params: api.CopyMealDishParams) ![]MealDishIngredient {
     const statement = try Statement.init(self,
         \\INSERT INTO meal_dish_ingredients (meal_dish_id, ingredient_id, quantity, unit)
@@ -1092,6 +1314,27 @@ fn upgradeV0V1(db: *Db) !void {
         db.db,
         \\ALTER TABLE properties ADD COLUMN parent_id INTEGER DEFAULT NULL REFERENCES properties(id) ON DELETE CASCADE;
         \\PRAGMA user_version = 1;
+    ,
+        null,
+        null,
+        null,
+    ));
+}
+
+fn upgradeV1V2(db: *Db) !void {
+    try cCheck(db.db, sqlite.sqlite3_exec(
+        db.db,
+        \\CREATE TABLE ingredient_categories(
+        \\    id INTEGER PRIMARY KEY AUTOINCREMENT,
+        \\    name TEXT UNIQUE NOT NULL
+        \\);
+        \\CREATE TABLE ingredient_category_mapping(
+        \\    id INTEGER PRIMARY KEY AUTOINCREMENT,
+        \\    ingredient_id INTEGER NOT NULL REFERENCES ingredients(id) ON DELETE CASCADE,
+        \\    category_id INTEGER NOT NULL REFERENCES ingredient_categories(id) ON DELETE CASCADE,
+        \\    UNIQUE(ingredient_id, category_id)
+        \\);
+        \\PRAGMA user_version = 2;
     ,
         null,
         null,

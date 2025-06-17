@@ -1,14 +1,15 @@
 import * as header from "./header.js";
-import { makeIngredients } from "./data.js";
+import { makeIngredients, makeIngredientCategories } from "./data.js";
 
 let ingredients = makeIngredients();
+let ingredient_categories = makeIngredientCategories();
 
 const ingredient_list = document.getElementById("ingredient_list");
 
-async function appendToIngredientList(ingredient) {
+async function appendToIngredientList(name, url) {
   const link = document.createElement("a");
-  link.href = "/ingredient.html?id=" + ingredient.id;
-  link.innerText = ingredient.name;
+  link.href = url;
+  link.innerText = name;
   ingredient_list.append(link);
   ingredient_list.append(document.createElement("br"));
 }
@@ -31,23 +32,44 @@ async function init() {
     }
   };
 
-  await ingredients.initFromServer();
+  await Promise.all([
+    ingredients.initFromServer(),
+    ingredient_categories.initFromServer(),
+  ]);
 
-  ingredients.items.sort((a, b) => {
-    if (a.name < b.name) {
+  const url_list = [];
+  for (const ingredient of ingredients.items) {
+    if (ingredient.category_mappings.length === 0) {
+      url_list.push([ingredient.name, `/ingredient.html?id=${ingredient.id}`]);
+    }
+  }
+
+  for (const category of ingredient_categories.items) {
+    url_list.push([
+      category.name,
+      `/ingredient_category.html?id=${category.id}`,
+    ]);
+  }
+
+  url_list.sort((a, b) => {
+    if (a[0] < b[0]) {
       return -1;
     }
-    if (a.name > b.name) {
+    if (a[0] > b[0]) {
       return 1;
     }
     return 0;
   });
 
-  for (let ingredient of ingredients.items) {
-    appendToIngredientList(ingredient);
+  for (const [name, url] of url_list) {
+    appendToIngredientList(name, url);
   }
 
-  ingredients.new_callback = appendToIngredientList;
+  ingredients.new_callback = (ingredient) =>
+    appendToIngredientList(
+      ingredient.name,
+      `/ingredient.html?id=${ingredient.id}`,
+    );
 }
 
 window.onload = init;

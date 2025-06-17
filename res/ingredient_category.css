@@ -1,0 +1,4 @@
+#ingredient_links {
+  grid-template-columns: repeat(2, auto);
+  column-gap: 0.5em;
+}

@@ -1,0 +1,22 @@
+<!doctype html>
+<html>
+  <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="/water.css" />
+    <link rel="stylesheet" href="/common.css" />
+    <link rel="stylesheet" href="ingredient_category.css" />
+    <script src="ingredient_category.js" defer="true" type="module"></script>
+    <script src="sphearch.js"></script>
+  </head>
+  <body>
+    <input id="category_name_edit" class="common_edit_title" type="text" />
+    <h2>Ingredients</h2>
+    <div id="ingredient_links" class="common_grid"></div>
+    <br />
+    <sphearch-bar
+      id="add_ingredient_search"
+      placeholder="Add an ingredient..."
+      autoselect="true"
+    ></sphearch-bar>
+  </body>
+</html>

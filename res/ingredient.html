@@ -9,7 +9,14 @@
     <script src="sphearch.js"></script>
   </head>
   <body>
-    <input id="ingredient_name_edit" type="text" />
+    <input id="ingredient_name_edit" class="common_edit_title" type="text" />
+    <button style="display: none" id="promote_category">
+      Promote to category
+    </button>
+    <div style="display: none" id="category_list">
+      <h2>Categories</h2>
+    </div>
+    <h2>Serving info</h2>
     <div id="ingredient_values" class="common_grid">
       <label for="serving_size_g">Serving size (g)</label>
       <input id="serving_size_g" type="number" min="0" />

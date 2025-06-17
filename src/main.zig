@@ -151,6 +151,38 @@ const HttpContext = struct {
                 try self.db.modifyMealDishIngredient(id, params);
                 try respondEmpty(connection);
             },
+            .add_ingredient_category => {
+                const params = try parseJsonBody(api.AddIngredientCategoryParams, self.scratch.allocator(), body);
+                try params.validate();
+
+                const new_category = try self.db.addIngredientCategory(self.scratch.allocator(), params);
+                try respondJson(self.scratch.allocator(), connection, new_category);
+            },
+            .get_ingredient_category => |id| {
+                const category = try self.db.getIngredientCategory(self.scratch.allocator(), id);
+                try respondJson(self.scratch.allocator(), connection, category);
+            },
+            .get_ingredient_categories => {
+                const categories = try self.db.getIngredientCategories(self.scratch.allocator());
+                try respondJson(self.scratch.allocator(), connection, categories);
+            },
+            .modify_ingredient_category => |id| {
+                const params = try parseJsonBody(api.ModifyIngredientCategoryParams, self.scratch.allocator(), body);
+                try params.validate();
+
+                try self.db.modifyIngredientCategory(id, params);
+                try respondEmpty(connection);
+            },
+            .add_ingredient_to_category => {
+                const params = try parseJsonBody(api.AddIngredientCategoryMapping, self.scratch.allocator(), body);
+
+                const response = try self.db.addIngredientCategoryMapping(params);
+                try respondJson(self.scratch.allocator(), connection, response);
+            },
+            .delete_ingredient_category_mapping => |id| {
+                try self.db.deleteIngredientCategoryMapping(id);
+                try respondEmpty(connection);
+            },
             .copy_meal_dish => {
                 const params = try parseJsonBody(api.CopyMealDishParams, self.scratch.allocator(), body);
                 const new_ingredients = try self.db.copyMealDish(self.scratch.allocator(), params);

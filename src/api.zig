@@ -184,6 +184,35 @@ pub const ModifyMealDishIngredientParams = struct {
     }
 };
 
+pub const AddIngredientCategoryParams = struct {
+    ingredient_id: ?i64 = null,
+    name: ?[]const u8 = null,
+
+    pub fn validate(self: AddIngredientCategoryParams) !void {
+        if (self.ingredient_id == null and self.name == null) return error.MissingField;
+
+        if (self.name) |name| {
+            const equivalent_modify = ModifyIngredientCategoryParams{
+                .name = name,
+            };
+            try equivalent_modify.validate();
+        }
+    }
+};
+
+pub const ModifyIngredientCategoryParams = struct {
+    name: []const u8,
+
+    pub fn validate(self: ModifyIngredientCategoryParams) !void {
+        if (self.name.len == 0) return error.InvalidName;
+    }
+};
+
+pub const AddIngredientCategoryMapping = struct {
+    category_id: i64,
+    ingredient_id: i64,
+};
+
 pub const CopyMealDishParams = struct {
     from_meal_dish_id: i64,
     to_meal_dish_id: i64,
@@ -213,6 +242,12 @@ pub const Target = union(enum) {
     add_meal_dish_ingredient,
     delete_meal_dish_ingredient: i64,
     modify_meal_dish_ingredient: i64,
+    add_ingredient_category,
+    get_ingredient_category: i64,
+    get_ingredient_categories,
+    modify_ingredient_category: i64,
+    add_ingredient_to_category,
+    delete_ingredient_category_mapping: i64,
     copy_meal_dish,
     memory_usage,
     filesystem: []const u8,
@@ -232,6 +267,8 @@ pub const Target = union(enum) {
             meals,
             meal_dishes,
             meal_dish_ingredients,
+            ingredient_categories,
+            ingredient_category_mappings,
             copy_meal_dish,
             memory,
         };
@@ -253,6 +290,7 @@ pub const Target = union(enum) {
                         .dishes => return .get_dishes,
                         .meals => return .get_meals,
                         .memory => return .memory_usage,
+                        .ingredient_categories => return .get_ingredient_categories,
                         else => return error.UnhandledMethod,
                     }
                 },
@@ -265,6 +303,8 @@ pub const Target = union(enum) {
                         .meals => return .add_meal,
                         .meal_dishes => return .add_meal_dish,
                         .meal_dish_ingredients => return .add_meal_dish_ingredient,
+                        .ingredient_categories => return .add_ingredient_category,
+                        .ingredient_category_mappings => return .add_ingredient_to_category,
                         .copy_meal_dish => return .copy_meal_dish,
                         else => return error.UnhandledMethod,
                     }
@@ -282,6 +322,7 @@ pub const Target = union(enum) {
             .GET => {
                 switch (api) {
                     .ingredients => return .{ .get_ingredient = id },
+                    .ingredient_categories => return .{ .get_ingredient_category = id },
                     .meals => return .{ .get_meal = id },
                     else => return error.UnhandledMethod,
                 }
@@ -293,6 +334,7 @@ pub const Target = union(enum) {
                     .ingredients => return .{ .modify_ingredient = id },
                     .ingredient_properties => return .{ .modify_ingredient_property = id },
                     .meal_dish_ingredients => return .{ .modify_meal_dish_ingredient = id },
+                    .ingredient_categories => return .{ .modify_ingredient_category = id },
                     else => return error.UnhandledMethod,
                 }
             },
@@ -302,6 +344,7 @@ pub const Target = union(enum) {
                     .meal_dish_ingredients => return .{ .delete_meal_dish_ingredient = id },
                     .meal_dishes => return .{ .delete_meal_dish = id },
                     .ingredient_properties => return .{ .delete_ingredient_property = id },
+                    .ingredient_category_mappings => return .{ .delete_ingredient_category_mapping = id },
                     else => return error.UnhandledMethod,
                 }
             },

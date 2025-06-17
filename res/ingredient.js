@@ -1,11 +1,16 @@
 import * as header from "./header.js";
-import { Ingredient, makeProperties } from "./data.js";
+import {
+  Ingredient,
+  makeProperties,
+  makeIngredientCategories,
+} from "./data.js";
 const url = new URL(window.location.href);
 import "./sphdelete-button.js";
 
 const ingredient_id = url.searchParams.get("id");
 const ingredient = new Ingredient(ingredient_id);
 const properties = makeProperties();
+const categories = makeIngredientCategories();
 
 /** @type HTMLInputElement */
 const title = document.getElementById("ingredient_name_edit");
@@ -21,6 +26,10 @@ const new_property = document.getElementById("new_property");
 const ingredient_properties_node = document.getElementById(
   "ingredient_properties",
 );
+/** @type HTMLButtonElement */
+const promote_to_category_button = document.getElementById("promote_category");
+/** @type HTMLDivElement */
+const category_list_node = document.getElementById("category_list");
 
 function updatePageWithProperties() {
   const property_names = properties.items.map((elem) => elem.name);
@@ -113,10 +122,22 @@ function appendPropertyToList(ingredient_property, focus) {
   }
 }
 
+function appendCategoryNode(category_id) {
+  const link = document.createElement("a");
+  link.style.display = "block";
+  link.innerText = categories.getById(category_id).name;
+  link.href = `/ingredient_category.html?id=${category_id}`;
+  category_list_node.append(link);
+}
+
 async function init() {
   header.prependHeaderToBody();
 
-  await Promise.all([ingredient.initFromServer(), properties.initFromServer()]);
+  await Promise.all([
+    ingredient.initFromServer(),
+    properties.initFromServer(),
+    categories.initFromServer(),
+  ]);
 
   for (const ingredient_property of ingredient.data.properties) {
     appendPropertyToList(ingredient_property, false);
@@ -150,6 +171,36 @@ async function init() {
 
   new_property.oninput = (ev) => {
     ev.target.scrollIntoView();
+  };
+
+  if (ingredient.data.category_mappings.length === 0) {
+    promote_to_category_button.style.display = "block";
+  } else {
+    category_list_node.style.display = "block";
+  }
+
+  for (const mapping of ingredient.data.category_mappings) {
+    appendCategoryNode(mapping.ingredient_category_id);
+  }
+
+  promote_to_category_button.onclick = async () => {
+    const response = await fetch("/ingredient_categories", {
+      method: "PUT",
+      body: JSON.stringify({
+        ingredient_id: ingredient_id,
+      }),
+    });
+
+    if (response.status != 200) {
+      throw new Error("Promotion failed");
+    }
+
+    const new_category = await response.json();
+    categories.items.push(new_category);
+    console.log("new category");
+    promote_to_category_button.style.display = "none";
+    category_list_node.style.display = "block";
+    appendCategoryNode(new_category.id);
   };
 }
 
