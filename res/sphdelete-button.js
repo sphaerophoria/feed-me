@@ -15,31 +15,23 @@ const sheet = new CSSStyleSheet();
 sheet.replaceSync(
   `
     sphdelete-button {
-      /* Div by default will add padding (line-height) to the content box which
-       * messes up placement in a grid. We could set line-height to 0 instead,
-       * but if we are trying to expose the input box as closesly as possible,
-       * this is a better representation of that. Downside is that you can no
-       * longer directly set width/height/etc. on the sphdelete-button element,
-       * which might be confusing for external users.
-       */
-      display: contents;
+      display: block;
+      width: fit-content;
+      filter: saturate(20%);
+      width: 1em;
+      height: 1em;
     }
 
     sphdelete-button input {
-      /* Prevent adopting block type which extends
-       * all the way to the right edge of the parent
-       * div
-       */
-      display: inline-block;
+      display: block;
       background: unset;
-      width: 1em;
-      height: 1em;
+      width: 100%;
+      height: 100%;
       padding: 0em;
       margin: 0px;
-      filter: saturate(20%);
     }
 
-    sphdelete-button input:hover{
+    sphdelete-button:hover{
       filter: unset;
     }
   `,
