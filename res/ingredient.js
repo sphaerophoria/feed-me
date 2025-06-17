@@ -94,6 +94,12 @@ function appendPropertyToList(ingredient_property, focus) {
     });
   };
 
+  input.onkeydown = (ev) => {
+    if (ev.key === "Enter") {
+      new_property.search_box.focus();
+    }
+  };
+
   input.onfocus = (ev) => {
     ev.target.select();
   };
