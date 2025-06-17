@@ -60,7 +60,7 @@ function updatePageWithIngredient() {
   // FIXME: createDoucumentFragment?
 }
 
-function appendPropertyToList(ingredient_property) {
+function appendPropertyToList(ingredient_property, focus) {
   const key_value_div = document.createDocumentFragment();
 
   const delete_button = document.createElement("sphdelete-button");
@@ -102,7 +102,9 @@ function appendPropertyToList(ingredient_property) {
 
   ingredient_properties_node.append(key_value_div);
 
-  input.focus();
+  if (focus === true) {
+    input.focus();
+  }
 }
 
 async function init() {
@@ -111,10 +113,10 @@ async function init() {
   await Promise.all([ingredient.initFromServer(), properties.initFromServer()]);
 
   for (const ingredient_property of ingredient.data.properties) {
-    appendPropertyToList(ingredient_property);
+    appendPropertyToList(ingredient_property, false);
   }
 
-  ingredient.on_new_property = appendPropertyToList;
+  ingredient.on_new_property = (prop) => appendPropertyToList(prop, true);
 
   updatePageWithProperties();
   updatePageWithIngredient();
