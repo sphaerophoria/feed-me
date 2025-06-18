@@ -80,6 +80,7 @@ function addDateNode(date, alias) {
   parent_node.append(summary_title);
 
   const summary_node = document.createElement("div");
+  summary_node.classList.add("summary");
   parent_node.append(summary_node);
   summary_nodes.set(date_string, summary_node);
 
@@ -128,26 +129,34 @@ function initDateNodes() {
 }
 
 function updateSummaryNodes() {
-  console.log("updating");
   const day_summaries = new Map();
 
-  for (let meal of meals.items) {
+  for (const meal of meals.items) {
     const key = new Date(meal.timestamp_utc).toLocaleDateString();
     if (!day_summaries.has(key)) {
-      day_summaries.set(key, new Map());
+      day_summaries.set(key, {
+        summary_complete: true,
+        properties: new Map(),
+      });
     }
 
     const day_summary = day_summaries.get(key);
 
+    if (meal.summary_complete !== true) {
+      day_summary.summary_complete = false;
+    }
     for (const property_summary of meal.summary) {
       const property_key = property_summary.property_id;
 
-      let existing = day_summary.get(property_key, 0);
+      let existing = day_summary.properties.get(property_key, 0);
       if (existing === undefined) {
         existing = 0;
       }
 
-      day_summary.set(property_key, existing + property_summary.value);
+      day_summary.properties.set(
+        property_key,
+        existing + property_summary.value,
+      );
     }
   }
 
@@ -160,7 +169,7 @@ function updateSummaryNodes() {
 
     // FIXME: updateSummary() in meal.js
     const fragment = document.createDocumentFragment();
-    for (const [property_id, value] of day_summary) {
+    for (const [property_id, value] of day_summary.properties) {
       const row = document.createElement("tr");
       fragment.append(row);
 
@@ -174,6 +183,7 @@ function updateSummaryNodes() {
       value_col.innerText = value;
     }
 
+    summary_node.classList.toggle("complete", day_summary.summary_complete);
     summary_node.replaceChildren(fragment);
   }
 }
@@ -203,7 +213,6 @@ async function init() {
 
 window.onload = init;
 window.onpageshow = async function () {
-  console.log("i'm back baybeee");
   if (fully_initialized) {
     await meals.update();
     updateSummaryNodes();

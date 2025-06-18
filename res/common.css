@@ -1,3 +1,14 @@
+:root {
+  --caution-color: #ff8000;
+  --ready-color: rgb(32, 167, 32);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ready-color: rgb(100, 219, 100);
+  }
+}
+
 .common_edit_title {
   font-weight: 600;
   font-size: 35.2px;
@@ -16,6 +27,18 @@
 
 .common_grid > * {
   margin: 0px;
+}
+
+.incomplete_link {
+  color: #ff3030;
+}
+
+.summary {
+  color: var(--caution-color);
+}
+
+.summary.complete {
+  color: var(--ready-color);
 }
 
 input[type="number"] {

@@ -83,6 +83,11 @@ def set_ingredient_serving_sizes(ingredient_id, serving_size_g, serving_size_ml,
     })
 
 
+def mark_ingredient_complete(ingredient_id, completed):
+    send_request("PUT", "/ingredients/" + str(ingredient_id), {
+        "fully_entered": completed,
+    })
+
 def add_property(name, parent_id):
     p = send_request("PUT", "/properties", {
         "name": name,
@@ -208,6 +213,7 @@ def test_ingredient(ingredient, expected_id, expected_ss_g, expected_ss_ml, expe
     assert(ingredient_w_properties["serving_size_g"] == expected_ss_g)
     assert(ingredient_w_properties["serving_size_ml"] == expected_ss_ml)
     assert(ingredient_w_properties["serving_size_pieces"] == expected_ss_pieces)
+    assert(ingredient["fully_entered"] == True)
 
     for expected_category_id, mapping in zip(expected_categories, ingredient_w_properties["category_mappings"]):
         assert(expected_category_id == mapping["ingredient_category_id"])
@@ -329,6 +335,10 @@ def test_endpoints():
     for [ingredient, prop, value] in options:
         add_ingredient_property(ingredient["id"], prop["id"], value)
 
+    mark_ingredient_complete(bread["id"], True)
+    mark_ingredient_complete(egg["id"], True)
+    mark_ingredient_complete(cream_cheese["id"], True)
+
     egg_on_bread = add_dish("egg on bread")
     bread_and_cheese = add_dish("bread and cheese")
     modify_dish(bread_and_cheese["id"], "breadd and cheese")
@@ -366,7 +376,10 @@ def test_endpoints():
         [protein["id"], 2],
     ])
 
-    # idgaf about the bagel, it has no parameters set
+    # Not testing bagel as much as the others, mostly left completely unset,
+    # but we can check that the fully_entered flag is propagating correctly
+    assert(ingredients[3]["id"] == bagel["id"])
+    assert(ingredients[3]["fully_entered"] == False)
 
     assert bread_category["name"] == "bread"
     assert other_category["name"] == "test category w/ typo"

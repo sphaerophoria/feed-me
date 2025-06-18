@@ -30,6 +30,8 @@ const ingredient_properties_node = document.getElementById(
 const promote_to_category_button = document.getElementById("promote_category");
 /** @type HTMLDivElement */
 const category_list_node = document.getElementById("category_list");
+/** @type HTMLInputElement */
+const fully_entered_checkbox = document.getElementById("complete_checkbox");
 
 function updatePageWithProperties() {
   const property_names = properties.items.map((elem) => elem.name);
@@ -143,10 +145,19 @@ async function init() {
     appendPropertyToList(ingredient_property, false);
   }
 
+  console.log(fully_entered_checkbox);
+  fully_entered_checkbox.checked = ingredient.data.fully_entered;
+
   ingredient.on_new_property = (prop) => appendPropertyToList(prop, true);
 
   updatePageWithProperties();
   updatePageWithIngredient();
+
+  fully_entered_checkbox.onchange = (ev) => {
+    ingredient.modifyIngredient({
+      fully_entered: ev.target.checked,
+    });
+  };
 
   serving_size_g.oninput = (ev) =>
     ingredient.modifyIngredient({

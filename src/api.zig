@@ -130,6 +130,7 @@ pub const ModifyIngredientParams = struct {
     serving_size_g: ?i64 = null,
     serving_size_ml: ?i64 = null,
     serving_size_pieces: ?i64 = null,
+    fully_entered: ?bool = null,
 
     pub fn validate(self: ModifyIngredientParams) !void {
         if (self.name) |name| {
