@@ -13,6 +13,7 @@ const other_meals = makeMeals();
 const ingredients = makeIngredients();
 const dishes = makeDishes();
 const properties = makeProperties();
+const ingredient_links = new Map();
 
 /** @type HTMLSpanElement */
 const meal_id_node = document.getElementById("meal_id");
@@ -143,6 +144,14 @@ function appendMealDishIngredient(parent_div, meal_dish, meal_dish_ingredient) {
   const label = document.createElement("a");
   label.innerText = ingredient.name;
   label.href = "/ingredient.html?id=" + ingredient.id;
+  label.classList.toggle("incomplete_link", ingredient.fully_entered !== true);
+
+  if (!ingredient_links.has(ingredient.id)) {
+    ingredient_links.set(ingredient.id, []);
+  }
+  const this_ingredient_links = ingredient_links.get(ingredient.id);
+  this_ingredient_links.push(label);
+
   first_grid_div.append(label);
 
   const input = document.createElement("input");
@@ -221,6 +230,7 @@ function updateSummary() {
   }
 
   summary_node.replaceChildren(fragment);
+  summary_node.classList.toggle("complete", meal.data.summary_complete);
 }
 
 function makeAddIngredientDropdown(meal_dish) {
@@ -368,6 +378,16 @@ function appendMealDish(meal_dish) {
   meal_dishes_node.append(div);
 }
 
+function updateMealDishHighlights() {
+  for (const [id, elems] of ingredient_links) {
+    const ingredient = ingredients.getById(id);
+    const incomplete = ingredient.fully_entered !== true;
+    for (const elem of elems) {
+      elem.classList.toggle("incomplete_link", incomplete);
+    }
+  }
+}
+
 async function init() {
   header.prependHeaderToBody();
   const id = parseInt(url.searchParams.get("id"));
@@ -409,6 +429,12 @@ async function init() {
     } catch {
       // Put error somewhere visible to user
     }
+  };
+
+  window.onpageshow = async () => {
+    await Promise.all([ingredients.update(), meal.update()]);
+    updateMealDishHighlights();
+    updateSummary();
   };
 }
 

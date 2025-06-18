@@ -19,9 +19,11 @@ function appendLink(mapping, node) {
   node.append(delete_button);
 
   const link = document.createElement("a");
-  link.innerText = ingredients.getById(mapping.ingredient_id).name;
+  const ingredient = ingredients.getById(mapping.ingredient_id);
+  link.innerText = ingredient.name;
   link.href = `/ingredient.html?id=${mapping.ingredient_id}`;
   link.style.display = "block";
+  link.classList.toggle("incomplete_link", ingredient.fully_entered !== true);
   node.append(link);
 
   const mapping_id = mapping.id;

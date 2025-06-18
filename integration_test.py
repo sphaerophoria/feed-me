@@ -83,6 +83,11 @@ def set_ingredient_serving_sizes(ingredient_id, serving_size_g, serving_size_ml,
     })
 
 
+def mark_ingredient_complete(ingredient_id, completed):
+    send_request("PUT", "/ingredients/" + str(ingredient_id), {
+        "fully_entered": completed,
+    })
+
 def add_property(name, parent_id):
     p = send_request("PUT", "/properties", {
         "name": name,
@@ -200,7 +205,7 @@ def get_meal(meal_id):
 def delete_meal(meal_id):
     send_request("DELETE", "/meals/" + str(meal_id), None)
 
-def test_ingredient(ingredient, expected_id, expected_ss_g, expected_ss_ml, expected_ss_pieces, expected_categories, expected_properties):
+def test_ingredient(ingredient, expected_id, expected_ss_g, expected_ss_ml, expected_ss_pieces, expected_fully_entered, expected_categories, expected_properties):
     assert("properties" not in ingredient)
 
     ingredient_w_properties = get_ingredient(expected_id)
@@ -208,6 +213,7 @@ def test_ingredient(ingredient, expected_id, expected_ss_g, expected_ss_ml, expe
     assert(ingredient_w_properties["serving_size_g"] == expected_ss_g)
     assert(ingredient_w_properties["serving_size_ml"] == expected_ss_ml)
     assert(ingredient_w_properties["serving_size_pieces"] == expected_ss_pieces)
+    assert(ingredient["fully_entered"] == expected_fully_entered)
 
     for expected_category_id, mapping in zip(expected_categories, ingredient_w_properties["category_mappings"]):
         assert(expected_category_id == mapping["ingredient_category_id"])
@@ -251,7 +257,7 @@ def add_bread_and_cheese_to_meal(meal_id, bread_and_cheese, bread, cream_cheese)
     dish_cheese = add_meal_dish_ingredient(dish["id"], cream_cheese["id"])
     modify_meal_dish_ingredient(dish_cheese["id"], 50, "mass")
 
-def test_meal(meal, today, timezone, summary, dish_ids, dish_ingredients=None):
+def test_meal(meal, today, timezone, summary_complete, summary, dish_ids, dish_ingredients=None):
     assert(meal["timestamp_utc"] == today)
     assert(meal["tz_offs_min"] == timezone)
     assert(len(meal["dishes"]) == len(dish_ids))
@@ -277,6 +283,8 @@ def test_meal(meal, today, timezone, summary, dish_ids, dish_ingredients=None):
     for retrieved, expected in zip (meal["summary"], summary):
         assert(abs(float(retrieved["value"]) - float(expected["value"])) < 1e-3)
         assert(retrieved["property_id"] == expected["property_id"])
+
+    assert(meal["summary_complete"] == summary_complete)
 
 def removed_mappings(item):
     ret = copy.deepcopy(item)
@@ -329,6 +337,9 @@ def test_endpoints():
     for [ingredient, prop, value] in options:
         add_ingredient_property(ingredient["id"], prop["id"], value)
 
+    mark_ingredient_complete(bread["id"], True)
+    mark_ingredient_complete(egg["id"], True)
+
     egg_on_bread = add_dish("egg on bread")
     bread_and_cheese = add_dish("bread and cheese")
     modify_dish(bread_and_cheese["id"], "breadd and cheese")
@@ -347,19 +358,19 @@ def test_endpoints():
     if len(ingredients) != 4:
         raise RuntimeError("Unexpected number of ingredients")
 
-    test_ingredient(ingredients[0], egg["id"], 50, 0, 1, [], [
+    test_ingredient(ingredients[0], egg["id"], 50, 0, 1, True, [], [
         [calories["id"], 70],
         [fat["id"], 5],
         [protein["id"], 6.1],
     ])
 
-    test_ingredient(ingredients[1], bread["id"], 51, 0, 2, [bread_category["id"]], [
+    test_ingredient(ingredients[1], bread["id"], 51, 0, 2, True, [bread_category["id"]], [
         [calories["id"], 120],
         [fat["id"], 1],
         [protein["id"], 5],
     ])
 
-    test_ingredient(ingredients[2], cream_cheese["id"], 28, 0, 0, [], [
+    test_ingredient(ingredients[2], cream_cheese["id"], 28, 0, 0, False, [], [
         [calories["id"], 70],
         [fat["id"], 5],
         [saturated_fat["id"], 1],
@@ -377,9 +388,11 @@ def test_endpoints():
     assert(len(retrieved_bread_category["mappings"]) == 2)
     assert(retrieved_bread_category["mappings"][0]["ingredient_id"] == bread["id"])
     assert(retrieved_bread_category["mappings"][1]["ingredient_id"] == bagel["id"])
+    assert(retrieved_bread_category["fully_entered"] == False)
 
     retrieved_other_category = get_ingredient_category(other_category["id"])
     assert(retrieved_other_category["name"] == "test category")
+    assert(retrieved_other_category["fully_entered"] == True)
 
     retrieved_ingredient_categories = get_ingredient_categories();
     assert(len(retrieved_ingredient_categories) == 2)
@@ -406,7 +419,7 @@ def test_endpoints():
         { "property_id": protein["id"], "value": 17.2 },
     ]
 
-    test_meal(meals[0], today, timezone, meal_1_expected_properties , [
+    test_meal(meals[0], today, timezone, True, meal_1_expected_properties , [
         egg_on_bread["id"]
     ])
 
@@ -417,7 +430,7 @@ def test_endpoints():
         {'property_id': protein["id"], 'value': 25.771}
     ]
 
-    test_meal(meals[1], today, timezone, meal_2_expected_properties, [
+    test_meal(meals[1], today, timezone, False, meal_2_expected_properties, [
         egg_on_bread["id"],
         bread_and_cheese["id"],
     ])
@@ -435,14 +448,14 @@ def test_endpoints():
 
     ]
 
-    test_meal(meal_1_retreived, today, timezone, meal_1_expected_properties , [
+    test_meal(meal_1_retreived, today, timezone, True, meal_1_expected_properties , [
         egg_on_bread["id"]
     ], [
         egg_on_bread_ingredients,
     ])
 
     meal_2_retreived = get_meal(meal_2["id"])
-    test_meal(meal_2_retreived, today, timezone, meal_2_expected_properties , [
+    test_meal(meal_2_retreived, today, timezone, False, meal_2_expected_properties , [
         egg_on_bread["id"],
         bread_and_cheese["id"],
     ], [

@@ -59,7 +59,7 @@ pub fn init(path: [:0]const u8) !Db {
         .db = db.?,
     };
 
-    const app_version = 2;
+    const app_version = 3;
     const version = try ret.userVersion();
     if (version > app_version) {
         return error.UnknownVersion;
@@ -68,6 +68,7 @@ pub fn init(path: [:0]const u8) !Db {
     const upgrade_funcs: []const *const fn (*Db) anyerror!void = &.{
         initv1,
         upgradeV1V2,
+        upgradeV2V3,
     };
 
     if (version < upgrade_funcs.len) {
@@ -89,7 +90,7 @@ pub fn deinit(self: *Db) void {
 pub fn addIngredient(self: *Db, name: []const u8) !Ingredient {
     const statement = try Statement.init(
         self,
-        "INSERT INTO ingredients (name, serving_size_g, serving_size_ml, serving_size_pieces) VALUES(?1, 0, 0, 0);",
+        "INSERT INTO ingredients (name, serving_size_g, serving_size_ml, serving_size_pieces, fully_entered) VALUES(?1, 0, 0, 0, 0);",
     );
     defer statement.deinit();
 
@@ -104,6 +105,7 @@ pub fn addIngredient(self: *Db, name: []const u8) !Ingredient {
         .serving_size_g = 0,
         .serving_size_ml = 0,
         .serving_size_pieces = 0,
+        .fully_entered = false,
         .category_mappings = .empty,
     };
 }
@@ -128,6 +130,7 @@ pub const Ingredient = struct {
     serving_size_ml: i64,
     serving_size_pieces: i64,
     category_mappings: sphtud.util.RuntimeSegmentedList(IngredientCategoryMapping),
+    fully_entered: bool,
     // Only set on individual ingredient return
     properties: ?sphtud.util.RuntimeSegmentedList(IngredientProperty) = null,
 };
@@ -135,7 +138,7 @@ pub const Ingredient = struct {
 pub fn getIngredient(self: *Db, id: i64, leaky: std.mem.Allocator) !Ingredient {
     const statement = try Statement.init(
         self,
-        "SELECT name, serving_size_g, serving_size_ml, serving_size_pieces FROM ingredients WHERE id = ?1;",
+        "SELECT name, serving_size_g, serving_size_ml, serving_size_pieces, fully_entered FROM ingredients WHERE id = ?1;",
     );
     defer statement.deinit();
 
@@ -148,6 +151,7 @@ pub fn getIngredient(self: *Db, id: i64, leaky: std.mem.Allocator) !Ingredient {
         .serving_size_g = try statement.geti64(1),
         .serving_size_ml = try statement.geti64(2),
         .serving_size_pieces = try statement.geti64(3),
+        .fully_entered = try statement.getBool(4),
         .category_mappings = try self.getCategoriesForIngredient(leaky, id),
         .properties = try self.getIngredientProperties(leaky, id),
     };
@@ -211,7 +215,7 @@ fn getIngredientProperties(self: *Db, leaky: std.mem.Allocator, ingredient_id: i
 pub fn getIngredients(self: *Db, leaky: std.mem.Allocator) !sphtud.util.RuntimeSegmentedList(Ingredient) {
     const statement = try Statement.init(
         self,
-        "SELECT id, name, serving_size_g, serving_size_ml, serving_size_pieces FROM ingredients;",
+        "SELECT id, name, serving_size_g, serving_size_ml, serving_size_pieces, fully_entered FROM ingredients;",
     );
     defer statement.deinit();
 
@@ -230,6 +234,7 @@ pub fn getIngredients(self: *Db, leaky: std.mem.Allocator) !sphtud.util.RuntimeS
             .serving_size_g = try statement.geti64(2),
             .serving_size_ml = try statement.geti64(3),
             .serving_size_pieces = try statement.geti64(4),
+            .fully_entered = try statement.getBool(5),
             .category_mappings = try self.getCategoriesForIngredient(leaky, ingredient_id),
         });
     }
@@ -284,6 +289,10 @@ pub fn modifyIngredient(self: *Db, leaky: std.mem.Allocator, id: i64, params: ap
         try set_params_builder.appendItem("serving_size_pieces", 5);
     }
 
+    if (params.fully_entered) |_| {
+        try set_params_builder.appendItem("fully_entered", 6);
+    }
+
     if (set_params_builder.first) {
         return error.NoParams;
     }
@@ -299,6 +308,7 @@ pub fn modifyIngredient(self: *Db, leaky: std.mem.Allocator, id: i64, params: ap
     if (params.serving_size_g) |g| try statement.bindi64(3, g);
     if (params.serving_size_ml) |ml| try statement.bindi64(4, ml);
     if (params.serving_size_pieces) |pieces| try statement.bindi64(5, pieces);
+    if (params.fully_entered) |fully_entered| try statement.bindBool(6, fully_entered);
 
     try statement.stepNoResult();
 
@@ -483,6 +493,7 @@ pub const Meal = struct {
     timestamp_utc: i64,
     tz_offs_min: i64,
     dishes: sphtud.util.RuntimeSegmentedList(MealDish),
+    summary_complete: bool,
     summary: []PropertySummary,
 };
 
@@ -502,6 +513,7 @@ pub fn addMeal(self: *Db, params: api.AddMealParams) !Meal {
         .timestamp_utc = params.timestamp_utc,
         .tz_offs_min = params.tz_offs_min,
         .dishes = .empty,
+        .summary_complete = true,
         .summary = &.{},
     };
 }
@@ -525,6 +537,7 @@ pub fn getMeal(self: *Db, leaky: std.mem.Allocator, scratch: sphtud.alloc.Linear
         .timestamp_utc = timestamp,
         .tz_offs_min = tz_offs_min,
         .dishes = try self.getMealDishes(leaky, id, .with_ingredients),
+        .summary_complete = try self.getSummaryComplete(id),
         .summary = try self.getMealSummary(leaky, scratch, id),
     };
 }
@@ -609,6 +622,7 @@ pub fn getMeals(self: *Db, leaky: std.mem.Allocator, scratch: sphtud.alloc.Linea
                 meal_id,
                 .without_ingredients,
             ),
+            .summary_complete = try self.getSummaryComplete(meal_id),
             .summary = try self.getMealSummary(leaky, scratch, meal_id),
         });
     }
@@ -625,6 +639,17 @@ fn ingredientById(ingredients: sphtud.util.RuntimeSegmentedList(Ingredient), id:
     }
 
     return null;
+}
+
+fn getIngredientMap(self: *Db, leaky: std.mem.Allocator) !std.AutoHashMap(i64, Ingredient) {
+    const ingredients = try self.getIngredients(leaky);
+    var it = ingredients.iter();
+    var ret = std.AutoHashMap(i64, Ingredient).init(leaky);
+
+    while (it.next()) |ingredient| {
+        try ret.put(ingredient.id, ingredient.*);
+    }
+    return ret;
 }
 
 fn getPropertyParentMappings(self: *Db, leaky: std.mem.Allocator) !std.AutoHashMap(i64, []i64) {
@@ -669,12 +694,30 @@ fn getPropertyParentMappings(self: *Db, leaky: std.mem.Allocator) !std.AutoHashM
     return ret;
 }
 
+fn getSummaryComplete(self: *Db, meal_id: i64) !bool {
+    const statement = try Statement.init(self,
+        \\SELECT MIN(ig.fully_entered)
+        \\    FROM meal_dish_ingredients as mdi
+        \\    LEFT JOIN ingredients AS ig ON mdi.ingredient_id = ig.id
+        \\    WHERE mdi.meal_dish_id IN (
+        \\        SELECT id FROM meal_dishes
+        \\        WHERE meal_dishes.meal_id = ?1
+        \\    )
+    );
+    defer statement.deinit();
+
+    try statement.bindi64(1, meal_id);
+
+    try statement.stepExpectRow();
+    return (try statement.getOptionalBool(0)) orelse true;
+}
+
 fn getMealSummary(self: *Db, leaky: std.mem.Allocator, scratch: sphtud.alloc.LinearAllocator, meal_id: i64) ![]PropertySummary {
     const checkpoint = scratch.checkpoint();
     defer scratch.restore(checkpoint);
 
     const statement = try Statement.init(self,
-        \\SELECT mdi.quantity, mdi.unit, igp.value, igp.property_id, ig.serving_size_g, ig.serving_size_ml, ig.serving_size_pieces
+        \\SELECT mdi.quantity, mdi.unit, igp.value, igp.property_id, ig.serving_size_g, ig.serving_size_ml, ig.serving_size_pieces, ig.id
         \\    FROM meal_dish_ingredients as mdi
         \\    LEFT JOIN ingredients as ig
         \\        ON ig.id == mdi.ingredient_id
@@ -902,6 +945,7 @@ pub fn deleteMealDishIngredient(self: *Db, id: i64) !void {
 const IngredientCategory = struct {
     id: i64,
     name: []const u8,
+    fully_entered: bool,
     // Only retrieved in specific page
     mappings: ?sphtud.util.RuntimeSegmentedList(IngredientCategoryMapping),
 };
@@ -969,14 +1013,34 @@ pub fn getIngredientCategory(self: *Db, leaky: std.mem.Allocator, id: i64) !Ingr
     return .{
         .id = id,
         .name = name,
+        .fully_entered = try self.getIngredientCategoryFullyEntered(id),
         .mappings = try self.getIngredientCategoryIngredients(leaky, id),
     };
 }
 
+pub fn getIngredientCategoryFullyEntered(self: *Db, category_id: i64) !bool {
+    const statement = try Statement.init(self,
+        \\SELECT MIN(fully_entered)
+        \\   FROM ingredient_category_mapping AS icm
+        \\   LEFT JOIN ingredients ON ingredients.id = icm.ingredient_id
+        \\   WHERE icm.category_id = ?1
+    );
+    defer statement.deinit();
+
+    try statement.bindi64(1, category_id);
+
+    try statement.stepExpectRow();
+    return (try statement.getOptionalBool(0)) orelse true;
+}
+
 pub fn getIngredientCategories(self: *Db, leaky: std.mem.Allocator) !sphtud.util.RuntimeSegmentedList(IngredientCategory) {
-    const statement = try Statement.init(
-        self,
-        "SELECT id, name FROM ingredient_categories",
+    const statement = try Statement.init(self,
+        \\SELECT id, name, (
+        \\  SELECT MIN(fully_entered) FROM ingredient_category_mapping AS icm
+        \\      LEFT JOIN ingredients
+        \\      ON ingredients.id = icm.ingredient_id
+        \\      WHERE icm.category_id = ingredient_categories.id
+        \\  ) FROM ingredient_categories
     );
     defer statement.deinit();
 
@@ -991,6 +1055,7 @@ pub fn getIngredientCategories(self: *Db, leaky: std.mem.Allocator) !sphtud.util
         try ret.append(.{
             .id = try statement.geti64(0),
             .name = try statement.getText(leaky, 1),
+            .fully_entered = (try statement.getOptionalBool(2)) orelse true,
             .mappings = null,
         });
     }
@@ -1146,6 +1211,11 @@ const Statement = struct {
         try cCheck(self.db.db, sqlite.sqlite3_bind_int64(self.inner, column, val));
     }
 
+    fn bindBool(self: Statement, column: c_int, val: bool) !void {
+        const val_int: c_int = if (val) 1 else 0;
+        try self.bindInt(column, val_int);
+    }
+
     fn bindNull(self: Statement, column: c_int) !void {
         try cCheck(self.db.db, sqlite.sqlite3_bind_null(
             self.inner,
@@ -1165,6 +1235,27 @@ const Statement = struct {
 
     fn geti64(self: Statement, column: c_int) !i64 {
         return sqlite.sqlite3_column_int64(self.inner, column);
+    }
+
+    fn getBool(self: Statement, column: c_int) !bool {
+        const ret_int = sqlite.sqlite3_column_int(self.inner, column);
+        if (ret_int != 1 and ret_int != 0) {
+            return error.UnexpectedValue;
+        }
+
+        return ret_int != 0;
+    }
+
+    fn getOptionalBool(self: Statement, column: c_int) !?bool {
+        const t = sqlite.sqlite3_column_type(self.inner, column);
+        if (t == sqlite.SQLITE_NULL) return null;
+
+        const ret_int = sqlite.sqlite3_column_int(self.inner, column);
+        if (ret_int != 1 and ret_int != 0) {
+            return error.UnexpectedValue;
+        }
+
+        return ret_int != 0;
     }
 
     fn getOptionali64(self: Statement, column: c_int) !?i64 {
@@ -1335,6 +1426,18 @@ fn upgradeV1V2(db: *Db) !void {
         \\    UNIQUE(ingredient_id, category_id)
         \\);
         \\PRAGMA user_version = 2;
+    ,
+        null,
+        null,
+        null,
+    ));
+}
+
+fn upgradeV2V3(db: *Db) !void {
+    try cCheck(db.db, sqlite.sqlite3_exec(
+        db.db,
+        \\ALTER TABLE ingredients ADD COLUMN fully_entered INTEGER NOT NULL DEFAULT 0;
+        \\PRAGMA user_version = 3;
     ,
         null,
         null,

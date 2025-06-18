@@ -6,8 +6,9 @@ let ingredient_categories = makeIngredientCategories();
 
 const ingredient_list = document.getElementById("ingredient_list");
 
-async function appendToIngredientList(name, url) {
+async function appendToIngredientList(name, url, complete) {
   const link = document.createElement("a");
+  link.classList.toggle("incomplete_link", complete !== true);
   link.href = url;
   link.innerText = name;
   ingredient_list.append(link);
@@ -40,7 +41,11 @@ async function init() {
   const url_list = [];
   for (const ingredient of ingredients.items) {
     if (ingredient.category_mappings.length === 0) {
-      url_list.push([ingredient.name, `/ingredient.html?id=${ingredient.id}`]);
+      url_list.push([
+        ingredient.name,
+        `/ingredient.html?id=${ingredient.id}`,
+        ingredient.fully_entered,
+      ]);
     }
   }
 
@@ -48,6 +53,7 @@ async function init() {
     url_list.push([
       category.name,
       `/ingredient_category.html?id=${category.id}`,
+      category.fully_entered,
     ]);
   }
 
@@ -61,14 +67,15 @@ async function init() {
     return 0;
   });
 
-  for (const [name, url] of url_list) {
-    appendToIngredientList(name, url);
+  for (const [name, url, fully_entered] of url_list) {
+    appendToIngredientList(name, url, fully_entered);
   }
 
   ingredients.new_callback = (ingredient) =>
     appendToIngredientList(
       ingredient.name,
       `/ingredient.html?id=${ingredient.id}`,
+      ingredient.fully_entered,
     );
 }
 
