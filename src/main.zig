@@ -5,6 +5,7 @@ const Db = @import("Db.zig");
 
 const HttpContext = struct {
     resource_dir: std.fs.Dir,
+    wasm_dir: std.fs.Dir,
     scratch: *sphtud.alloc.ScratchAlloc,
     db: Db,
     // For memory tracking purposes
@@ -13,6 +14,7 @@ const HttpContext = struct {
     pub fn init(root_alloc: *sphtud.alloc.Sphalloc, scratch: *sphtud.alloc.ScratchAlloc, db_path: [:0]const u8) !HttpContext {
         return .{
             .resource_dir = try std.fs.cwd().openDir("res", .{}),
+            .wasm_dir = try std.fs.cwd().openDir("zig-out/bin", .{}),
             .scratch = scratch,
             .db = try Db.init(db_path),
             .root_alloc = root_alloc,
@@ -221,10 +223,33 @@ const HttpContext = struct {
                 });
                 try http_writer.writeBody(response_buf.items);
             },
+            .wasm => |fs_path| {
+                const buf = self.scratch.allocMax(u8);
+                std.debug.print("{s}\n", .{fs_path});
+                const content = try self.wasm_dir.readFile(fs_path, buf);
+                if (content.len == buf.len) {
+                    return error.OutOfMemory;
+                }
+                self.scratch.shrinkFrontTo(content.ptr + content.len);
+
+                const content_type = contentTypeFromExtension(fs_path);
+                std.debug.print("{s}\n", .{content_type orelse ""});
+
+                var writer = sphtud.http.httpWriter(connection.writer());
+                try writer.start(.{
+                    .status = .ok,
+                    .content_length = content.len,
+                    .content_type = content_type,
+                });
+                try writer.writeBody(content);
+            },
             .filesystem => |fs_path| {
                 const target_end = std.mem.indexOfScalar(u8, fs_path, '?') orelse fs_path.len;
                 const buf = self.scratch.allocMax(u8);
                 const content = try self.resource_dir.readFile(fs_path[1..target_end], buf);
+                if (content.len == buf.len) {
+                    return error.OutOfMemory;
+                }
                 self.scratch.shrinkFrontTo(content.ptr + content.len);
 
                 const content_type = contentTypeFromExtension(fs_path);
@@ -269,12 +294,14 @@ fn contentTypeFromExtension(path: []const u8) ?[]const u8 {
     const KnownExtensions = enum {
         @".html",
         @".js",
+        @".wasm",
     };
 
     const parsed_extension = std.meta.stringToEnum(KnownExtensions, extension) orelse return null;
     return switch (parsed_extension) {
         .@".html" => "text/html",
         .@".js" => "text/javascript",
+        .@".wasm" => "application/wasm",
     };
 }
 
@@ -392,7 +419,7 @@ pub fn main() !void {
     try root_alloc.initPinned(tpa.allocator(), "root");
     defer root_alloc.deinit();
 
-    var scratch = sphtud.alloc.ScratchAlloc.init(try root_alloc.arena().alloc(u8, 1 * 1024 * 1024));
+    var scratch = sphtud.alloc.ScratchAlloc.init(try root_alloc.arena().alloc(u8, 2 * 1024 * 1024));
 
     var args = Args.parse(
         try std.process.argsWithAllocator(root_alloc.general()),

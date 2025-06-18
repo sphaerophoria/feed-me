@@ -258,6 +258,7 @@ pub const Target = union(enum) {
     delete_ingredient_category_mapping: i64,
     copy_meal_dish,
     memory_usage,
+    wasm: []const u8,
     filesystem: []const u8,
 
     pub fn parse(target: []const u8, method: std.http.Method) !Target {
@@ -280,6 +281,7 @@ pub const Target = union(enum) {
             ingredient_category_mappings,
             copy_meal_dish,
             memory,
+            wasm,
         };
 
         const maybe_api = it.next(Api) orelse unreachable;
@@ -289,6 +291,14 @@ pub const Target = union(enum) {
                 return .{ .filesystem = target };
             },
         };
+
+        switch (api) {
+            .wasm => {
+                if (target.len < 7) return error.InvalidWasmPath;
+                return .{ .wasm = target[6..] };
+            },
+            else => {},
+        }
 
         const maybe_id = it.next(i64) orelse {
             switch (method) {
