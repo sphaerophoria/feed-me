@@ -59,7 +59,7 @@ pub fn init(path: [:0]const u8) !Db {
         .db = db.?,
     };
 
-    const app_version = 2;
+    const app_version = 3;
     const version = try ret.userVersion();
     if (version > app_version) {
         return error.UnknownVersion;
@@ -68,6 +68,7 @@ pub fn init(path: [:0]const u8) !Db {
     const upgrade_funcs: []const *const fn (*Db) anyerror!void = &.{
         initv1,
         upgradeV1V2,
+        upgradeV2V3,
     };
 
     if (version < upgrade_funcs.len) {
@@ -1335,6 +1336,18 @@ fn upgradeV1V2(db: *Db) !void {
         \\    UNIQUE(ingredient_id, category_id)
         \\);
         \\PRAGMA user_version = 2;
+    ,
+        null,
+        null,
+        null,
+    ));
+}
+
+fn upgradeV2V3(db: *Db) !void {
+    try cCheck(db.db, sqlite.sqlite3_exec(
+        db.db,
+        \\ALTER TABLE ingredients ADD COLUMN fully_entered INTEGER NOT NULL DEFAULT 0;
+        \\PRAGMA user_version = 3;
     ,
         null,
         null,
