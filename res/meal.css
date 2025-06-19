@@ -2,16 +2,23 @@
   margin-left: 2rem;
 }
 
-.ingredients_table {
-  grid-template-columns: repeat(4, auto);
-}
-
 .ingredient_label {
   min-width: 100px;
 }
 
 .ingredients_added * .copy_dish {
   visibility: hidden;
+}
+
+.ingredient_row {
+  display: grid;
+  grid-template-columns: 1fr min-content;
+  row-gap: 0;
+}
+
+.ingredient_row > * {
+  display: flex;
+  align-items: center;
 }
 
 .dish_header {
@@ -34,12 +41,12 @@
 }
 
 @media (width < 35em) {
-  .ingredients_table {
+  .ingredient_row {
     grid-template-columns: auto;
-    row-gap: 0.25em;
   }
-  .ingredients_table button {
-    margin-bottom: 1em;
+  sphdrag-list > div {
+    margin-top: 1em;
+    align-items: unset;
   }
 }
 

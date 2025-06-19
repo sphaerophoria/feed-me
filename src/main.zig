@@ -144,6 +144,11 @@ const HttpContext = struct {
                 const meal_dish_ingredient = try self.db.addMealDishIngredient(params);
                 try respondJson(self.scratch.allocator(), connection, meal_dish_ingredient);
             },
+            .move_meal_dish_ingredient => {
+                const params = try parseJsonBody(api.ReorderMealDishIngredientParams, self.scratch.allocator(), body);
+                try self.db.reorderMealDishIgnredient(params);
+                try respondEmpty(connection);
+            },
             .modify_meal_dish_ingredient => |id| {
                 const params = try parseJsonBody(api.ModifyMealDishIngredientParams, self.scratch.allocator(), body);
                 try params.validate();

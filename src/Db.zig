@@ -59,7 +59,7 @@ pub fn init(path: [:0]const u8) !Db {
         .db = db.?,
     };
 
-    const app_version = 3;
+    const app_version = 4;
     const version = try ret.userVersion();
     if (version > app_version) {
         return error.UnknownVersion;
@@ -69,6 +69,7 @@ pub fn init(path: [:0]const u8) !Db {
         initv1,
         upgradeV1V2,
         upgradeV2V3,
+        upgradeV3V4,
     };
 
     if (version < upgrade_funcs.len) {
@@ -792,6 +793,7 @@ pub const MealDishIngredient = struct {
     ingredient_id: i64,
     quantity: i64,
     unit: api.UnitType,
+    entry_order: u32,
 };
 
 pub const MealDish = struct {
@@ -904,23 +906,45 @@ pub fn getMealDishes(self: *Db, leaky: std.mem.Allocator, meal_id: i64, retrieve
 }
 
 pub fn addMealDishIngredient(self: *Db, params: api.AddMealDishIngredientParams) !MealDishIngredient {
-    const statement = try Statement.init(self,
-        \\INSERT INTO meal_dish_ingredients
-        \\    (meal_dish_id, ingredient_id, quantity, unit)
-        \\    VALUES (?1, ?2, 0, 0);
-    );
-    defer statement.deinit();
+    {
+        const statement = try Statement.init(self,
+            \\INSERT INTO meal_dish_ingredients
+            \\    (meal_dish_id, ingredient_id, quantity, unit, entry_order)
+            \\    VALUES (?1, ?2, 0, 0,
+            \\        COALESCE(
+            \\            (SELECT MAX(entry_order) FROM meal_dish_ingredients WHERE meal_dish_id = ?1),
+            \\            0
+            \\        ) + 1);
+        );
+        defer statement.deinit();
 
-    try statement.bindi64(1, params.meal_dish_id);
-    try statement.bindi64(2, params.ingredient_id);
+        try statement.bindi64(1, params.meal_dish_id);
+        try statement.bindi64(2, params.ingredient_id);
 
-    try statement.stepNoResult();
+        try statement.stepNoResult();
+    }
+
+    const id = sqlite.sqlite3_last_insert_rowid(self.db);
+
+    const entry_order = blk: {
+        const statement = try Statement.init(
+            self,
+            "SELECT entry_order FROM meal_dish_ingredients WHERE id = ?1",
+        );
+        defer statement.deinit();
+
+        try statement.bindi64(1, id);
+        try statement.stepExpectRow();
+
+        break :blk try statement.getUInt(0);
+    };
 
     return .{
-        .id = sqlite.sqlite3_last_insert_rowid(self.db),
+        .id = id,
         .meal_dish_id = params.meal_dish_id,
         .ingredient_id = params.ingredient_id,
         .quantity = 0,
+        .entry_order = entry_order,
         .unit = @enumFromInt(0),
     };
 }
@@ -947,8 +971,177 @@ pub fn deleteMealDishIngredient(self: *Db, id: i64) !void {
     );
     defer statement.deinit();
 
+    // FIXME: Heal db order
+
     try statement.bindi64(1, id);
     try statement.stepNoResult();
+}
+
+pub fn reorderMealDishIgnredient(self: *Db, params: api.ReorderMealDishIngredientParams) !void {
+    const id = blk: {
+        const statement = try Statement.init(
+            self,
+            "SELECT id FROM meal_dish_ingredients WHERE entry_order = ?1 AND meal_dish_id = ?2",
+        );
+        defer statement.deinit();
+
+        try statement.bindi64(1, params.old_position);
+        try statement.bindi64(2, params.meal_dish_id);
+        try statement.stepExpectRow();
+        break :blk try statement.geti64(0);
+    };
+
+    {
+        const rotate: []const u8 = if (params.old_position < params.new_position)
+            "UPDATE meal_dish_ingredients SET entry_order = entry_order - 1 WHERE entry_order <= ?1 AND entry_order >= ?2 AND meal_dish_id = ?3"
+        else
+            "UPDATE meal_dish_ingredients SET entry_order = entry_order + 1 WHERE entry_order <= ?2 AND entry_order >= ?1 AND meal_dish_id = ?3";
+
+        const sequence: []const []const u8 = &.{
+            "UPDATE meal_dish_ingredients SET entry_order = 0 WHERE id = ?4",
+            rotate,
+            "UPDATE meal_dish_ingredients SET entry_order = ?1 WHERE id = ?4",
+        };
+
+        for (sequence) |sql| {
+            const statement = try Statement.init(
+                self,
+                sql,
+            );
+            defer statement.deinit();
+
+            if (std.mem.indexOf(u8, sql, "?1") != null) {
+                try statement.bindInt(1, params.new_position);
+            }
+
+            if (std.mem.indexOf(u8, sql, "?2") != null) {
+                try statement.bindInt(2, params.old_position);
+            }
+
+            if (std.mem.indexOf(u8, sql, "?3") != null) {
+                try statement.bindi64(3, params.meal_dish_id);
+            }
+
+            if (std.mem.indexOf(u8, sql, "?4") != null) {
+                try statement.bindi64(4, id);
+            }
+            try statement.stepNoResult();
+        }
+    }
+}
+
+test "reorder mdi" {
+    var db = try Db.init(":memory:");
+
+    const in1 = try db.addIngredient("i1");
+    const in2 = try db.addIngredient("i2");
+    const in3 = try db.addIngredient("i3");
+    const in4 = try db.addIngredient("i4");
+    const in5 = try db.addIngredient("i5");
+
+    const meal = try db.addMeal(.{
+        // Date at time of writing
+        .timestamp_utc = 1750448748,
+        // Surprisingly actually my timezone
+        .tz_offs_min = -420,
+    });
+
+    const dish = try db.addDish("d1");
+
+    const meal_dish = try db.addMealDish(.{
+        .dish_id = dish.id,
+        .meal_id = meal.id,
+    });
+
+    _ = try db.addMealDishIngredient(.{
+        .ingredient_id = in1.id,
+        .meal_dish_id = meal_dish.id,
+    });
+
+    _ = try db.addMealDishIngredient(.{
+        .ingredient_id = in2.id,
+        .meal_dish_id = meal_dish.id,
+    });
+
+    _ = try db.addMealDishIngredient(.{
+        .ingredient_id = in3.id,
+        .meal_dish_id = meal_dish.id,
+    });
+
+    _ = try db.addMealDishIngredient(.{
+        .ingredient_id = in4.id,
+        .meal_dish_id = meal_dish.id,
+    });
+
+    _ = try db.addMealDishIngredient(.{
+        .ingredient_id = in5.id,
+        .meal_dish_id = meal_dish.id,
+    });
+
+    {
+        var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+        defer arena.deinit();
+
+        const ingredients = try db.getMealDishIngredients(arena.allocator(), meal_dish.id);
+        try std.testing.expectEqual(1, ingredients[0].entry_order);
+        try std.testing.expectEqual(in1.id, ingredients[0].id);
+        try std.testing.expectEqual(2, ingredients[1].entry_order);
+        try std.testing.expectEqual(in2.id, ingredients[1].id);
+        try std.testing.expectEqual(3, ingredients[2].entry_order);
+        try std.testing.expectEqual(in3.id, ingredients[2].id);
+        try std.testing.expectEqual(4, ingredients[3].entry_order);
+        try std.testing.expectEqual(in4.id, ingredients[3].id);
+        try std.testing.expectEqual(5, ingredients[4].entry_order);
+        try std.testing.expectEqual(in5.id, ingredients[4].id);
+    }
+
+    // Rotate backwards
+    try db.reorderMealDishIgnredient(.{
+        .meal_dish_id = meal_dish.id,
+        .new_position = 2,
+        .old_position = 4,
+    });
+
+    {
+        var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+        defer arena.deinit();
+
+        const ingredients = try db.getMealDishIngredients(arena.allocator(), meal_dish.id);
+        try std.testing.expectEqual(1, ingredients[0].entry_order);
+        try std.testing.expectEqual(in1.id, ingredients[0].id);
+        try std.testing.expectEqual(2, ingredients[1].entry_order);
+        try std.testing.expectEqual(in4.id, ingredients[1].id);
+        try std.testing.expectEqual(3, ingredients[2].entry_order);
+        try std.testing.expectEqual(in2.id, ingredients[2].id);
+        try std.testing.expectEqual(4, ingredients[3].entry_order);
+        try std.testing.expectEqual(in3.id, ingredients[3].id);
+        try std.testing.expectEqual(5, ingredients[4].entry_order);
+        try std.testing.expectEqual(in5.id, ingredients[4].id);
+    }
+
+    // Rotate forwards
+    try db.reorderMealDishIgnredient(.{
+        .meal_dish_id = meal_dish.id,
+        .old_position = 2,
+        .new_position = 4,
+    });
+
+    {
+        var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+        defer arena.deinit();
+
+        const ingredients = try db.getMealDishIngredients(arena.allocator(), meal_dish.id);
+        try std.testing.expectEqual(1, ingredients[0].entry_order);
+        try std.testing.expectEqual(in1.id, ingredients[0].id);
+        try std.testing.expectEqual(2, ingredients[1].entry_order);
+        try std.testing.expectEqual(in2.id, ingredients[1].id);
+        try std.testing.expectEqual(3, ingredients[2].entry_order);
+        try std.testing.expectEqual(in3.id, ingredients[2].id);
+        try std.testing.expectEqual(4, ingredients[3].entry_order);
+        try std.testing.expectEqual(in4.id, ingredients[3].id);
+        try std.testing.expectEqual(5, ingredients[4].entry_order);
+        try std.testing.expectEqual(in5.id, ingredients[4].id);
+    }
 }
 
 const IngredientCategory = struct {
@@ -1147,8 +1340,8 @@ pub fn getIngredientCategoryIngredients(self: *Db, leaky: std.mem.Allocator, id:
 
 pub fn copyMealDish(self: *Db, leaky: std.mem.Allocator, params: api.CopyMealDishParams) ![]MealDishIngredient {
     const statement = try Statement.init(self,
-        \\INSERT INTO meal_dish_ingredients (meal_dish_id, ingredient_id, quantity, unit)
-        \\SELECT ?2, ingredient_id, quantity, unit
+        \\INSERT INTO meal_dish_ingredients (meal_dish_id, ingredient_id, quantity, unit, entry_order)
+        \\SELECT ?2, ingredient_id, quantity, unit, entry_order
         \\    FROM meal_dish_ingredients
         \\    WHERE meal_dish_id = ?1
     );
@@ -1165,7 +1358,7 @@ pub fn copyMealDish(self: *Db, leaky: std.mem.Allocator, params: api.CopyMealDis
 pub fn getMealDishIngredients(self: *Db, leaky: std.mem.Allocator, meal_dish_id: i64) ![]MealDishIngredient {
     const statement = try Statement.init(
         self,
-        "SELECT id, ingredient_id, quantity, unit FROM meal_dish_ingredients WHERE meal_dish_id = ?1",
+        "SELECT id, ingredient_id, quantity, unit, entry_order FROM meal_dish_ingredients WHERE meal_dish_id = ?1 ORDER BY entry_order",
     );
     defer statement.deinit();
 
@@ -1182,6 +1375,7 @@ pub fn getMealDishIngredients(self: *Db, leaky: std.mem.Allocator, meal_dish_id:
             .ingredient_id = try statement.geti64(1),
             .quantity = try statement.geti64(2),
             .unit = try statement.getUnitType(3),
+            .entry_order = try statement.getUInt(4),
         });
     }
 
@@ -1280,6 +1474,10 @@ const Statement = struct {
 
     fn getInt(self: Statement, column: c_int) !c_int {
         return sqlite.sqlite3_column_int(self.inner, column);
+    }
+
+    fn getUInt(self: Statement, column: c_int) !u31 {
+        return @intCast(try self.getInt(column));
     }
 
     fn getText(self: Statement, alloc: std.mem.Allocator, column: c_int) ![]const u8 {
@@ -1447,6 +1645,47 @@ fn upgradeV2V3(db: *Db) !void {
         db.db,
         \\ALTER TABLE ingredients ADD COLUMN fully_entered INTEGER NOT NULL DEFAULT 0;
         \\PRAGMA user_version = 3;
+    ,
+        null,
+        null,
+        null,
+    ));
+}
+
+fn upgradeV3V4(db: *Db) !void {
+    try cCheck(db.db, sqlite.sqlite3_exec(
+        db.db,
+        // https://sqlite.org/lang_altertable.html other types of schema changes
+        // Add order field by
+        //   * Setting all fields to null
+        //   * Extracting order values by insertion order (autoincrementing ids)
+        //   * Resetting table with new unique constraints and non null now
+        //   that all entries are non null
+        \\BEGIN TRANSACTION;
+        \\PRAGMA foreign_keys = OFF;
+        \\ALTER TABLE meal_dish_ingredients ADD COLUMN entry_order INTEGER DEFAULT NULL;
+        \\UPDATE meal_dish_ingredients AS mdi
+        \\    SET entry_order = (
+        \\        SELECT COUNT(id) FROM meal_dish_ingredients AS mdi2
+        \\        WHERE mdi.meal_dish_id = mdi2.meal_dish_id AND mdi2.id < mdi.id
+        \\    ) + 1;
+        \\CREATE TABLE meal_dish_ingredients_new(
+        \\    id INTEGER PRIMARY KEY AUTOINCREMENT,
+        \\    meal_dish_id INTEGER NOT NULL,
+        \\    ingredient_id INTEGER NOT NULL,
+        \\    quantity INTEGER NOT NULL,
+        \\    unit INTEGER NOT NULL,
+        \\    entry_order INTEGER NOT NULL,
+        \\    FOREIGN KEY(meal_dish_id) REFERENCES meal_dishes(id) ON DELETE CASCADE,
+        \\    FOREIGN KEY(ingredient_id) REFERENCES ingredients(id) ON DELETE CASCADE,
+        \\    UNIQUE(meal_dish_id, ingredient_id)
+        \\);
+        \\INSERT INTO meal_dish_ingredients_new SELECT * FROM meal_dish_ingredients;
+        \\DROP TABLE meal_dish_ingredients;
+        \\ALTER TABLE meal_dish_ingredients_new RENAME TO meal_dish_ingredients;
+        \\PRAGMA foreign_keys = ON;
+        \\PRAGMA user_version = 4;
+        \\COMMIT TRANSACTION;
     ,
         null,
         null,

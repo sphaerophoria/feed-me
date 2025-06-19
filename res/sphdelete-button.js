@@ -1,13 +1,17 @@
 class SphdeleteButton extends HTMLElement {
   constructor() {
     super();
+    this.attached = false;
   }
 
   connectedCallback() {
-    const delete_button = document.createElement("input");
-    delete_button.type = "image";
-    delete_button.src = "delete.svg";
-    this.append(delete_button);
+    if (!this.attached) {
+      this.attached = true;
+      const delete_button = document.createElement("input");
+      delete_button.type = "image";
+      delete_button.src = "delete.svg";
+      this.append(delete_button);
+    }
   }
 }
 
@@ -19,7 +23,9 @@ sheet.replaceSync(
       width: fit-content;
       filter: saturate(20%);
       width: 1em;
+      min-width: 1em;
       height: 1em;
+      min-height: 1em;
     }
 
     sphdelete-button input {

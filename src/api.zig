@@ -185,6 +185,12 @@ pub const ModifyMealDishIngredientParams = struct {
     }
 };
 
+pub const ReorderMealDishIngredientParams = struct {
+    meal_dish_id: i64,
+    old_position: u31,
+    new_position: u31,
+};
+
 pub const AddIngredientCategoryParams = struct {
     ingredient_id: ?i64 = null,
     name: ?[]const u8 = null,
@@ -243,6 +249,7 @@ pub const Target = union(enum) {
     add_meal_dish_ingredient,
     delete_meal_dish_ingredient: i64,
     modify_meal_dish_ingredient: i64,
+    move_meal_dish_ingredient,
     add_ingredient_category,
     get_ingredient_category: i64,
     get_ingredient_categories,
@@ -268,6 +275,7 @@ pub const Target = union(enum) {
             meals,
             meal_dishes,
             meal_dish_ingredients,
+            move_meal_dish_ingredient,
             ingredient_categories,
             ingredient_category_mappings,
             copy_meal_dish,
@@ -306,6 +314,7 @@ pub const Target = union(enum) {
                         .meal_dish_ingredients => return .add_meal_dish_ingredient,
                         .ingredient_categories => return .add_ingredient_category,
                         .ingredient_category_mappings => return .add_ingredient_to_category,
+                        .move_meal_dish_ingredient => return .move_meal_dish_ingredient,
                         .copy_meal_dish => return .copy_meal_dish,
                         else => return error.UnhandledMethod,
                     }

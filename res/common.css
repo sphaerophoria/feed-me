@@ -43,4 +43,12 @@
 
 input[type="number"] {
   width: 5em;
+  min-width: 5em;
+  max-width: 5em;
+}
+
+sphdrag-list > div {
+  display: grid;
+  grid-template-columns: min-content auto;
+  align-items: center;
 }
