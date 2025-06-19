@@ -1,5 +1,6 @@
 import * as header from "./header.js";
 import { makeMeals, makeDishes, makeProperties } from "./data.js";
+import * as property_helpers from "./property_helpers.js";
 
 const meals = makeMeals();
 const dishes = makeDishes();
@@ -84,6 +85,7 @@ function addDateNode(date, alias) {
 
   const summary_node = document.createElement("div");
   summary_node.classList.add("summary");
+  summary_node.classList.add("common_grid");
   parent_node.append(summary_node);
   summary_nodes.set(date_string, summary_node);
 
@@ -164,30 +166,26 @@ function updateSummaryNodes() {
   }
 
   for (const [date_key, day_summary] of day_summaries.entries()) {
-    console.log(date_key, day_summary);
     const summary_node = summary_nodes.get(date_key);
+
     if (summary_node === undefined) {
       continue;
     }
 
-    // FIXME: updateSummary() in meal.js
-    const fragment = document.createDocumentFragment();
-    for (const [property_id, value] of day_summary.properties) {
-      const row = document.createElement("tr");
-      fragment.append(row);
+    // Match format of meal.summary for updateSummaryNodeApi
+    // [ { property_id, value }, ... ]
+    const day_properties_array = Array.from(
+      day_summary.properties,
+      ([property_id, value]) => ({ property_id, value }),
+    );
+    const summary_complete = day_summary.summary_complete;
 
-      const name_col = document.createElement("td");
-      row.append(name_col);
-
-      const value_col = document.createElement("td");
-      row.append(value_col);
-
-      name_col.innerText = properties.getById(property_id).name;
-      value_col.innerText = value;
-    }
-
-    summary_node.classList.toggle("complete", day_summary.summary_complete);
-    summary_node.replaceChildren(fragment);
+    property_helpers.updateSummaryNode(
+      summary_node,
+      day_properties_array,
+      summary_complete,
+      properties,
+    );
   }
 }
 

@@ -30,3 +30,7 @@
     display: unset;
   }
 }
+
+#summary {
+  grid-template-columns: repeat(2, auto);
+}

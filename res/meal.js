@@ -1,4 +1,5 @@
 import * as header from "./header.js";
+import * as property_helpers from "./property_helpers.js";
 import {
   makeIngredients,
   makeDishes,
@@ -214,23 +215,12 @@ async function updateMealDishIngredient(id, quantity, unit) {
 }
 
 function updateSummary() {
-  const fragment = document.createDocumentFragment();
-  for (const entry of meal.data.summary) {
-    const row = document.createElement("tr");
-    fragment.append(row);
-
-    const name_col = document.createElement("td");
-    row.append(name_col);
-
-    const value_col = document.createElement("td");
-    row.append(value_col);
-
-    name_col.innerText = properties.getById(entry.property_id).name;
-    value_col.innerText = entry.value;
-  }
-
-  summary_node.replaceChildren(fragment);
-  summary_node.classList.toggle("complete", meal.data.summary_complete);
+  property_helpers.updateSummaryNode(
+    summary_node,
+    meal.data.summary,
+    meal.data.summary_complete,
+    properties,
+  );
 }
 
 function makeAddIngredientDropdown(meal_dish) {

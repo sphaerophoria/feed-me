@@ -1,5 +1,6 @@
 import * as header from "./header.js";
 import { makeProperties } from "./data.js";
+import * as helpers from "./property_helpers.js";
 
 const properties = makeProperties();
 
@@ -19,17 +20,6 @@ function makeNewPropertyInput(input, parent_id) {
   };
 }
 
-function calcDepth(property) {
-  var depth = 0;
-
-  while (property.parent_id !== null && property.parent_id !== undefined) {
-    property = properties.getById(property.parent_id);
-    depth += 1;
-  }
-
-  return depth;
-}
-
 function createPropertyNodes(property, fragment) {
   const input = document.createElement("input");
   input.value = property.name;
@@ -38,7 +28,7 @@ function createPropertyNodes(property, fragment) {
   };
   fragment.append(input);
 
-  const depth = calcDepth(property);
+  const depth = helpers.calcDepth(property, properties);
 
   const sub_div = document.createElement("div");
   sub_div.classList.add("input_2");
