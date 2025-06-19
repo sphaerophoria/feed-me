@@ -14,8 +14,23 @@
   visibility: hidden;
 }
 
-.dish_buttons {
+.dish_header {
   display: flex;
+  /* water.css h2 margins */
+  margin-top: 24px;
+  margin-bottom: 12px;
+  align-items: center;
+}
+
+.dish_header h2 {
+  margin: 0;
+}
+
+.dish_header sphdelete-button {
+  margin-right: 1em;
+  margin-top: 0.2em;
+  width: 1.5em;
+  height: 1.5em;
 }
 
 @media (width < 35em) {
@@ -25,9 +40,6 @@
   }
   .ingredients_table button {
     margin-bottom: 1em;
-  }
-  .dish_buttons {
-    display: unset;
   }
 }
 

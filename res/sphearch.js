@@ -63,12 +63,15 @@ class Sphearch extends HTMLElement {
     this.search_results = null;
     this.on_select = null;
     this.on_new = null;
-  }
 
-  connectedCallback() {
     this.search_box = document.createElement("input");
     this.search_box.type = "search";
 
+    this.words_div = document.createElement("div");
+    this.words_div.style.display = "none";
+  }
+
+  connectedCallback() {
     // FIXME: Surely this will come up again
     switch (this.getAttribute("autoselect")) {
       case "true":
@@ -89,6 +92,14 @@ class Sphearch extends HTMLElement {
       this.setSearchResults(new_results);
     };
 
+    this.search_box.onfocus = (ev) => {
+      this.words_div.style.display = "block";
+    };
+
+    this.search_box.onblur = () => {
+      this.words_div.style.display = "none";
+    };
+
     this.addEventListener("keydown", (ev) => {
       switch (ev.key) {
         case "ArrowDown":
@@ -104,8 +115,6 @@ class Sphearch extends HTMLElement {
           break;
       }
     });
-
-    this.words_div = document.createElement("div");
 
     this.append(this.search_box);
     this.append(this.words_div);

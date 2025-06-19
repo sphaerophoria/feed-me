@@ -8,6 +8,8 @@ import {
   makeMeals,
 } from "./data.js";
 const url = new URL(window.location.href);
+import "./sphearch.js";
+import "./sphdelete-button.js";
 
 const meal = new Meal(url.searchParams.get("id"));
 const other_meals = makeMeals();
@@ -224,19 +226,25 @@ function updateSummary() {
 }
 
 function makeAddIngredientDropdown(meal_dish) {
-  const select = document.createElement("select");
+  /** @type Sphearch */
+  const search = document.createElement("sphearch-bar");
+  search.setAttribute("autoselect", true);
+  search.setAttribute("placeholder", "Add an ingredient...");
 
-  const ingredient_names = ingredients.items.map((elem) => elem.name);
-  makeTriggerOnSelectDropdown(
-    select,
-    "Add an ingredient...",
-    ingredient_names,
-    (idx) => {
-      meal_dish.addIngredient(ingredients.items[idx].id);
-    },
-  );
+  let results = ingredients.items;
+  search.setSearchResults(results.map((elem) => elem.name));
+  search.search_results = (text) => {
+    results = ingredients.items.filter((ingredient) =>
+      ingredient.name.toLowerCase().includes(text),
+    );
+    return results.map((elem) => elem.name);
+  };
 
-  return select;
+  search.on_select = (idx) => {
+    meal_dish.addIngredient(results[idx].id);
+  };
+
+  return search;
 }
 
 function getOtherMealsForDish(dish_id) {
@@ -312,10 +320,24 @@ function appendMealDish(meal_dish) {
   const meal_dish_id = meal_dish.id();
   const div = document.createElement("div");
 
+  const header_bar = document.createElement("div");
+  header_bar.classList.add("dish_header");
+  div.append(header_bar);
+
+  const delete_button = document.createElement("sphdelete-button");
+  header_bar.append(delete_button);
+
+  delete_button.onclick = async () => {
+    await meal.deleteDish(meal_dish_id);
+    meal_dish_nodes.delete(meal_dish_id);
+    div.remove();
+    updateSummary();
+  };
+
   const name = document.createElement("h2");
   const dish_name = dishes.getById(meal_dish.dish_id()).name;
   name.innerText = dish_name;
-  div.append(name);
+  header_bar.append(name);
 
   const meal_content = document.createElement("div");
   meal_content.classList.add("meal-content");
@@ -326,22 +348,7 @@ function appendMealDish(meal_dish) {
   ingredient_div.classList.add("common_grid");
   meal_content.append(ingredient_div);
 
-  const dish_buttons_div = document.createElement("div");
-  dish_buttons_div.classList.add("dish_buttons");
-  meal_content.append(dish_buttons_div);
-
-  dish_buttons_div.append(makeAddIngredientDropdown(meal_dish));
-
-  const delete_dish = document.createElement("button");
-  delete_dish.innerText = "Delete " + dish_name;
-  delete_dish.onclick = async () => {
-    await meal.deleteDish(meal_dish_id);
-    meal_dish_nodes.delete(meal_dish_id);
-    div.remove();
-    updateSummary();
-  };
-
-  dish_buttons_div.append(delete_dish);
+  meal_content.append(makeAddIngredientDropdown(meal_dish));
 
   meal_dish.setIngredientCallback((mdi) => {
     appendMealDishIngredient(ingredient_div, meal_dish, mdi);
