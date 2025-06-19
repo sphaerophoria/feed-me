@@ -774,6 +774,15 @@ fn getMealSummary(self: *Db, leaky: std.mem.Allocator, scratch: sphtud.alloc.Lin
             .value = .fromf32(entry.value_ptr.*),
         }) catch unreachable;
     }
+
+    const lessThan = struct {
+        fn f(_: void, a: PropertySummary, b: PropertySummary) bool {
+            return a.property_id < b.property_id;
+        }
+    }.f;
+
+    std.sort.pdq(PropertySummary, ret.items, {}, lessThan);
+
     return ret.items;
 }
 
