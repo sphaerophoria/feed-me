@@ -103,6 +103,10 @@ class Sphearch extends HTMLElement {
       this.words_div.style.display = "none";
     };
 
+    this.words_div.addEventListener("mousedown", (ev) => {
+      ev.preventDefault();
+    });
+
     this.addEventListener("keydown", (ev) => {
       switch (ev.key) {
         case "ArrowDown":
