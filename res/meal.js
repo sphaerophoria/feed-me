@@ -8,7 +8,6 @@ import {
   makeMeals,
 } from "./data.js";
 const url = new URL(window.location.href);
-import "./sphearch.js";
 import "./sphdelete-button.js";
 
 const meal = new Meal(url.searchParams.get("id"));
@@ -24,10 +23,8 @@ const meal_id_node = document.getElementById("meal_id");
 /** @type HTMLButtonElement*/
 const delete_meal_button = document.getElementById("delete_meal");
 
-/** @type HTMLSelectElement */
-const instantiate_dish_dropdown = document.getElementById(
-  "instantiate_dish_dropdown",
-);
+/** @type Sphearch */
+const instantiate_dish_search = document.getElementById("instantiate_dish");
 
 /** @type HTMLDivElement */
 const meal_dishes_node = document.getElementById("meal_dishes");
@@ -77,34 +74,6 @@ function unitDisplayToApi(display) {
   }
 
   return null;
-}
-
-function makeTriggerOnSelectDropdown(
-  select_node,
-  preview_text,
-  options,
-  callback,
-) {
-  const fragment = document.createDocumentFragment();
-
-  const preview_node = document.createElement("option");
-  preview_node.innerText = preview_text;
-  fragment.append(preview_node);
-
-  for (const option_text of options) {
-    const option = document.createElement("option");
-    option.innerText = option_text;
-    fragment.append(option);
-  }
-
-  select_node.innerHTML = "";
-  select_node.append(fragment);
-
-  select_node.onchange = (ev) => {
-    // -1 because 0 is preview node
-    callback(ev.target.selectedIndex - 1);
-    ev.target.selectedIndex = 0;
-  };
 }
 
 function populateMealDishIngredientUnits(
@@ -240,8 +209,11 @@ function makeAddIngredientDropdown(meal_dish) {
     return results.map((elem) => elem.name);
   };
 
-  search.on_select = (idx) => {
-    meal_dish.addIngredient(results[idx].id);
+  search.on_select = async (idx) => {
+    await meal_dish.addIngredient(results[idx].id);
+    search.search_box.value = "";
+    results = ingredients.items;
+    search.setSearchResults(results.map((elem) => elem.name));
   };
 
   return search;
@@ -405,19 +377,29 @@ async function init() {
 
   updateSummary();
 
-  const dish_names = dishes.items.map((elem) => elem.name);
-  makeTriggerOnSelectDropdown(
-    instantiate_dish_dropdown,
-    "Add a dish...",
-    dish_names,
-    (idx) => {
-      const dish = dishes.items[idx];
-      meal.addDish({
-        meal_id: id,
-        dish_id: dish.id,
-      });
-    },
+  let search_dishes = dishes.items;
+  instantiate_dish_search.setSearchResults(
+    search_dishes.map((elem) => elem.name),
   );
+
+  instantiate_dish_search.search_results = (text) => {
+    search_dishes = dishes.items.filter((elem) =>
+      elem.name.toLowerCase().includes(text),
+    );
+    return search_dishes.map((elem) => elem.name);
+  };
+
+  instantiate_dish_search.on_select = async (idx) => {
+    const dish = search_dishes[idx];
+    await meal.addDish({
+      meal_id: id,
+      dish_id: dish.id,
+    });
+    instantiate_dish_search.search_box.value = "";
+    instantiate_dish_search.setSearchResults(
+      dishes.items.map((elem) => elem.name),
+    );
+  };
 
   delete_meal_button.onclick = async () => {
     try {

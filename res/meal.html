@@ -6,13 +6,19 @@
     <link rel="stylesheet" href="/common.css" />
     <link rel="stylesheet" href="meal.css" />
     <script src="meal.js" defer="true" type="module"></script>
+    <script src="sphearch.js"></script>
+    ;
   </head>
   <body>
     <h1>Meal <span id="meal_id"></span></h1>
     <button id="delete_meal">Delete</button>
     <div id="meal_dishes"></div>
     <hr />
-    <select id="instantiate_dish_dropdown"></select>
+    <sphearch-bar
+      id="instantiate_dish"
+      placeholder="Add a dish..."
+      autoselect="true"
+    ></sphearch-bar>
     <h2>Summary</h2>
     <div id="summary" class="common_grid summary"></div>
   </body>

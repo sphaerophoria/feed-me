@@ -46,7 +46,10 @@ class SearchBarData {
 
   updateHighlight(old_idx, new_idx) {
     if (old_idx !== null) {
-      this.items[old_idx].classList.remove("search_highlight");
+      const old_selected = this.items[old_idx];
+      if (old_selected !== undefined) {
+        old_selected.classList.remove("search_highlight");
+      }
     }
 
     if (new_idx !== null) {
