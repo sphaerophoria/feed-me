@@ -79,6 +79,6 @@ pub fn build(b: *std.Build) void {
     builder.makeRunTest("src/main.zig");
     builder.makeRunTest("src/wasm/htmlgen.zig");
 
-    builder.makeWasmExe("test", "src/wasm/ingredients.zig");
     builder.makeWasmExe("ingredient", "src/wasm/ingredient.zig");
+    builder.makeWasmExe("ingredients", "src/wasm/ingredients.zig");
 }

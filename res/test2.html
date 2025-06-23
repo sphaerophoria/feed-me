@@ -4,17 +4,19 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <link rel="stylesheet" href="/water.css" />
     <link rel="stylesheet" href="/common.css" />
+    <link rel="stylesheet" href="ingredient.css" />
+    <script src="sphdelete-button.js"></script>
     <script>
       window.onload = () => {
         const url = new URL(window.location.href);
         const ingredient_id = url.searchParams.get("id");
-        document.body.setAttribute("wsr-get", `/ingredients/${ingredient_id}`);
+        document.body["ingredient_id"] = ingredient_id;
       };
     </script>
     <script src="wsr.js" wasm-url="/wasm/ingredient.wasm"></script>
   </head>
   <!-- wsr-get is dynamic and injected by js above -->
-  <body wsr-generate="makeIngredientContent">
+  <body wsr-immediate="pageInit" wsr-argument-property="ingredient_id">
     <input id="title" class="common_edit_title" type="text" />
     <h2>Serving Info</h2>
     <div id="ingredient_values" class="common_grid">
@@ -24,7 +26,7 @@
         type="number"
         min="0"
         wsr-onevent="change"
-        wsr-argument="value"
+        wsr-argument-property="value"
         wsr-generate="servingSizeGChanged"
       />
       <label for="serving_size_ml">Serving size (ml)</label>
@@ -33,7 +35,7 @@
         type="number"
         min="0"
         wsr-onevent="change"
-        wsr-argument="value"
+        wsr-argument-property="value"
         wsr-generate="servingSizeMlChanged"
       />
       <label for="serving_size_pieces">Serving size (pieces)</label>
@@ -42,9 +44,11 @@
         type="number"
         min="0"
         wsr-onevent="change"
-        wsr-argument="value"
+        wsr-argument-property="value"
         wsr-generate="servingSizePiecesChanged"
       />
     </div>
+    <h2>Properties</h2>
+    <div id="ingredient_properties" class="common_grid"></div>
   </body>
 </html>

@@ -11,9 +11,21 @@ const imported = struct {
         content_ptr: [*]const u8, content_len: usize,
         attribute_ptr: [*]const u8, attribute_len: usize,
     ) void;
-    extern fn requestPut(
+    extern fn requestFetch(
         url_ptr: [*]const u8, url_len: usize,
         body_ptr: [*]const u8, body_len: usize,
+        method_ptr: [*]const u8, method_len: usize,
+        callback_ptr: [*]const u8, callback_len: usize,
+        arg_ptr: [*]const u8, arg_len: usize,
+    ) void;
+    extern fn deleteElemByQuery(
+        query_ptr: [*]const u8, query_len: usize,
+    ) void;
+    extern fn getSelfAttribute(
+        attr_ptr: [*]const u8, attr_len: usize,
+    ) void;
+    extern fn getSelfProperty(
+        prop_ptr: [*]const u8, prop_len: usize,
     ) void;
 };
 
@@ -49,11 +61,37 @@ pub fn replaceElemContent(elem_id: []const u8, content: []const u8, attribute: [
     );
 }
 
+pub fn deleteElemByQuery(query: []const u8) void {
+    imported.deleteElemByQuery(query.ptr, query.len);
+}
+
+// FIXME: Deprecated
 pub fn requestPut(url: []const u8, body: []const u8) void {
-    imported.requestPut(
+    imported.requestFetch(
         url.ptr, url.len,
         body.ptr, body.len,
+        undefined, 0,
+        undefined, 0,
+        undefined, 0,
     );
+}
+
+pub fn requestFetch(url: []const u8, body: []const u8, method: []const u8, callback: []const u8, arg: []const u8) void {
+    imported.requestFetch(
+        url.ptr, url.len,
+        body.ptr, body.len,
+        method.ptr, method.len,
+        callback.ptr, callback.len,
+        arg.ptr, arg.len,
+    );
+}
+
+pub fn getSelfAttribute(name: []const u8) void {
+    imported.getSelfAttribute(name.ptr, name.len);
+}
+
+pub fn getSelfProperty(name: []const u8) void {
+    imported.getSelfProperty(name.ptr, name.len);
 }
 
 pub fn panic(msg: []const u8, stack_trace: ?*std.builtin.StackTrace, return_address: ?usize) noreturn {
