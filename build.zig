@@ -4,6 +4,7 @@ const Builder = struct {
     b: *std.Build,
     target: std.Build.ResolvedTarget,
     wasm_target: std.Build.ResolvedTarget,
+    wasm_optimize: std.builtin.OptimizeMode,
     optimize: std.builtin.OptimizeMode,
     sphtud: *std.Build.Module,
     test_step: *std.Build.Step,
@@ -11,6 +12,7 @@ const Builder = struct {
     fn init(b: *std.Build) Builder {
         const target = b.standardTargetOptions(.{});
         const optimize = b.standardOptimizeOption(.{});
+        const wasm_optimize = b.option(std.builtin.OptimizeMode, "wasm-opt", "") orelse .Debug;
 
         const wasm_target = b.resolveTargetQuery(.{
             .cpu_arch = .wasm32,
@@ -24,6 +26,7 @@ const Builder = struct {
             .sphtud = b.dependency("sphtud", .{}).module("sphtud"),
             .target = target,
             .optimize = optimize,
+            .wasm_optimize = wasm_optimize,
             .wasm_target = wasm_target,
         };
     }
@@ -54,11 +57,12 @@ const Builder = struct {
             .name = name,
             .root_source_file = self.b.path(path),
             .target = self.wasm_target,
-            .optimize = self.optimize,
+            .optimize = self.wasm_optimize,
         });
 
         wasm_exe.entry = .disabled;
         wasm_exe.rdynamic = true;
+        wasm_exe.root_module.strip = false;
 
         self.b.installArtifact(wasm_exe);
     }

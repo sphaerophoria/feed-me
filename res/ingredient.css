@@ -1,7 +1,17 @@
-#ingredient_values {
-  grid-template-columns: repeat(2, auto);
+.ingredient_row {
+  display: flex;
+  align-items: center;
+  width: 25em;
 }
 
+.ingredient_row > * {
+  margin-right: 0.5em;
+}
+
+.ingredient_label {
+  flex-grow: 1;
+
+}
 #ingredient_properties {
   grid-template-columns: repeat(3, auto);
 }

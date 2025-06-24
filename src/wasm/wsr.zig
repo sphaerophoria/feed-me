@@ -2,30 +2,41 @@ const std = @import("std");
 
 const imported = struct {
     extern fn print(data: [*]u8, len: usize) void;
-    extern fn replaceSelfContent(
-        content_ptr: [*]const u8, content_len: usize,
-        attribute_ptr: [*]const u8, attribute_len: usize,
+    extern fn replaceSelfProperty(
+        content_ptr: [*]const u8,
+        content_len: usize,
+        property_ptr: [*]const u8,
+        property_len: usize,
     ) void;
-    extern fn replaceElemContent(
-        elem_id_ptr: [*]const u8, elem_id_len: usize,
-        content_ptr: [*]const u8, content_len: usize,
-        attribute_ptr: [*]const u8, attribute_len: usize,
+    extern fn replaceElemProperty(
+        elem_id_ptr: [*]const u8,
+        elem_id_len: usize,
+        content_ptr: [*]const u8,
+        content_len: usize,
+        property_ptr: [*]const u8,
+        property_len: usize,
     ) void;
     extern fn requestFetch(
-        url_ptr: [*]const u8, url_len: usize,
-        body_ptr: [*]const u8, body_len: usize,
-        method_ptr: [*]const u8, method_len: usize,
-        callback_ptr: [*]const u8, callback_len: usize,
-        arg_ptr: [*]const u8, arg_len: usize,
+        url_ptr: [*]const u8,
+        url_len: usize,
+        body_ptr: [*]const u8,
+        body_len: usize,
+        method_ptr: [*]const u8,
+        method_len: usize,
+        callback_ptr: [*]const u8,
+        callback_len: usize,
     ) void;
     extern fn deleteElemByQuery(
-        query_ptr: [*]const u8, query_len: usize,
+        query_ptr: [*]const u8,
+        query_len: usize,
     ) void;
     extern fn getSelfAttribute(
-        attr_ptr: [*]const u8, attr_len: usize,
+        attr_ptr: [*]const u8,
+        attr_len: usize,
     ) void;
     extern fn getSelfProperty(
-        prop_ptr: [*]const u8, prop_len: usize,
+        prop_ptr: [*]const u8,
+        prop_len: usize,
     ) void;
 };
 
@@ -46,18 +57,23 @@ comptime {
     _ = exported;
 }
 
-pub fn replaceSelfContent(content: []const u8, attribute: []const u8) void {
-    imported.replaceSelfContent(
-        content.ptr, content.len,
-        attribute.ptr, attribute.len,
+pub fn replaceSelfProperty(content: []const u8, property: []const u8) void {
+    imported.replaceSelfProperty(
+        content.ptr,
+        content.len,
+        property.ptr,
+        property.len,
     );
 }
 
-pub fn replaceElemContent(elem_id: []const u8, content: []const u8, attribute: []const u8) void {
-    imported.replaceElemContent(
-        elem_id.ptr, elem_id.len,
-        content.ptr, content.len,
-        attribute.ptr, attribute.len,
+pub fn replaceElemProperty(elem_id: []const u8, content: []const u8, property: []const u8) void {
+    imported.replaceElemProperty(
+        elem_id.ptr,
+        elem_id.len,
+        content.ptr,
+        content.len,
+        property.ptr,
+        property.len,
     );
 }
 
@@ -68,23 +84,51 @@ pub fn deleteElemByQuery(query: []const u8) void {
 // FIXME: Deprecated
 pub fn requestPut(url: []const u8, body: []const u8) void {
     imported.requestFetch(
-        url.ptr, url.len,
-        body.ptr, body.len,
-        undefined, 0,
-        undefined, 0,
-        undefined, 0,
+        url.ptr,
+        url.len,
+        body.ptr,
+        body.len,
+        undefined,
+        0,
+        undefined,
+        0,
     );
 }
 
-pub fn requestFetch(url: []const u8, body: []const u8, method: []const u8, callback: []const u8, arg: []const u8) void {
-    imported.requestFetch(
-        url.ptr, url.len,
-        body.ptr, body.len,
-        method.ptr, method.len,
-        callback.ptr, callback.len,
-        arg.ptr, arg.len,
-    );
-}
+pub const RequestFetch = struct {
+    url: []const u8,
+    method: []const u8,
+    body: []const u8 = &.{},
+    callback: []const u8 = &.{},
+
+    pub fn init(url: []const u8, method: []const u8) RequestFetch {
+        return .{
+            .url = url,
+            .method = method,
+        };
+    }
+
+    pub fn addBody(self: *RequestFetch, body: []const u8) void {
+        self.body = body;
+    }
+
+    pub fn addCallback(self: *RequestFetch, callback: []const u8) void {
+        self.callback = callback;
+    }
+
+    pub fn run(self: RequestFetch) void {
+        imported.requestFetch(
+            self.url.ptr,
+            self.url.len,
+            self.body.ptr,
+            self.body.len,
+            self.method.ptr,
+            self.method.len,
+            self.callback.ptr,
+            self.callback.len,
+        );
+    }
+};
 
 pub fn getSelfAttribute(name: []const u8) void {
     imported.getSelfAttribute(name.ptr, name.len);

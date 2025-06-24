@@ -29,7 +29,12 @@ fn tryMakeIngredientLinks() !void {
     var arena = std.heap.ArenaAllocator.init(std.heap.wasm_allocator);
     defer _ = arena.reset(.free_all);
 
-    const parsed = try std.json.parseFromSliceLeaky([]Ingredient, arena.allocator(), wsr.getInputBuffer(), .{ .ignore_unknown_fields = true},);
+    const parsed = try std.json.parseFromSliceLeaky(
+        []Ingredient,
+        arena.allocator(),
+        wsr.getInputBuffer(),
+        .{ .ignore_unknown_fields = true },
+    );
 
     std.sort.pdq(Ingredient, parsed, {}, struct {
         fn f(_: void, a: Ingredient, b: Ingredient) bool {
@@ -43,14 +48,14 @@ fn tryMakeIngredientLinks() !void {
     for (parsed) |ingredient| {
         try writeIngredient(&html_writer, ingredient);
     }
-    wsr.replaceSelfContent(output.items, "innerHTML");
+    wsr.replaceSelfProperty(output.items, "innerHTML");
 
     wsr.print("{s}", .{output.items});
 }
 
 pub export fn makeIngredientLinks() void {
     tryMakeIngredientLinks() catch |e| {
-        wsr.print("{s}" ,.{@errorName(e)});
+        wsr.print("{s}", .{@errorName(e)});
         return;
     };
 }

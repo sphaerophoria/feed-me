@@ -23,13 +23,13 @@ pub fn HtmlWriter(comptime Writer: type) type {
                 .in_open_tag => {
                     try self.inner.writeAll("/>");
                     self.state = .default;
-                }
+                },
             }
         }
 
         pub fn attribute(self: *Self, key: []const u8, value: []const u8) !void {
             if (self.state != .in_open_tag) return error.InvalidState;
-            try self.inner.print(" {s}=\"{s}\"", .{key, value});
+            try self.inner.print(" {s}=\"{s}\"", .{ key, value });
         }
 
         pub fn content(self: *Self, val: []const u8) !void {
