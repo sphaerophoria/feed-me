@@ -62,7 +62,7 @@ const Builder = struct {
 
         wasm_exe.entry = .disabled;
         wasm_exe.rdynamic = true;
-        wasm_exe.root_module.strip = false;
+        wasm_exe.want_lto = true;
 
         self.b.installArtifact(wasm_exe);
     }

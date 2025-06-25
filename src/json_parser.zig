@@ -1,6 +1,8 @@
 const std = @import("std");
 const wsr = @import("wasm/wsr.zig");
 
+pub const panic = wsr.panic;
+
 const JsonTokenType = enum {
     object_start,
     object_end,
@@ -32,18 +34,18 @@ const JsonLexer = struct {
         }
     };
 
-    fn init(content: []const u8) JsonLexer {
+    pub fn init(content: []const u8) JsonLexer {
         return .{
             .content = content,
         };
     }
 
-    fn next(self: *JsonLexer) ?Output {
+    pub fn next(self: *JsonLexer) ?Output {
         self.consumeWhitespace();
         return self.scanValue();
     }
 
-    fn expectToken(self: *JsonLexer, token: JsonTokenType) !Output {
+    pub fn expectToken(self: *JsonLexer, token: JsonTokenType) !Output {
         const res = self.next() orelse return error.NoToken;
         if (res.token_type != token) {
             return error.UnexpectedToken;
@@ -51,7 +53,18 @@ const JsonLexer = struct {
         return res;
     }
 
-    fn discardJsonValue(lexer: *JsonLexer) !void {
+    pub fn objectKeyOrEnd(self: *JsonLexer) !?[]const u8 {
+        const key_or_end = self.next() orelse return error.NoToken;
+        switch (key_or_end.token_type) {
+            .object_end => return null,
+            .string => {},
+            else => return error.InvalidKey,
+        }
+        _ = try self.expectToken(.colon);
+        return key_or_end.content(self.content);
+    }
+
+    pub fn discardJsonValue(lexer: *JsonLexer) !void {
         const start = lexer.next() orelse return error.NoValue;
         switch (start.token_type) {
             .object_start => try discardObject(lexer),
@@ -68,7 +81,7 @@ const JsonLexer = struct {
         }
     }
 
-    fn discardObject(lexer: *JsonLexer) anyerror!void {
+    pub fn discardObject(lexer: *JsonLexer) anyerror!void {
         while (true) {
             const key_or_end = lexer.next() orelse return error.UnfinishedObject;
             switch (key_or_end.token_type) {
@@ -81,7 +94,7 @@ const JsonLexer = struct {
         }
     }
 
-    fn discardArray(lexer: *JsonLexer) !void {
+    pub fn discardArray(lexer: *JsonLexer) !void {
         while (true) {
             const start = lexer.next() orelse return error.NoValue;
             switch (start.token_type) {
@@ -100,7 +113,7 @@ const JsonLexer = struct {
         }
     }
 
-    fn nextAsString(self: *JsonLexer) ![]const u8 {
+    pub fn nextAsString(self: *JsonLexer) ![]const u8 {
         const res = self.next() orelse return error.NoValue;
         switch (res.token_type) {
             .string => {},
@@ -111,7 +124,7 @@ const JsonLexer = struct {
         return res.content(self.content);
     }
 
-    fn nextAsInt(self: *JsonLexer, comptime T: type) !T {
+    pub fn nextAsInt(self: *JsonLexer, comptime T: type) !T {
         const res = self.next() orelse return error.NoValue;
         switch (res.token_type) {
             .number => {},
@@ -121,7 +134,7 @@ const JsonLexer = struct {
         return try std.fmt.parseInt(T, res.content(self.content), 0);
     }
 
-    fn nextAsFloat(self: *JsonLexer, comptime T: type) !T {
+    pub fn nextAsFloat(self: *JsonLexer, comptime T: type) !T {
         const res = self.next() orelse return error.NoValue;
         switch (res.token_type) {
             .number => {},
@@ -129,6 +142,14 @@ const JsonLexer = struct {
         }
 
         return try std.fmt.parseFloat(T, res.content(self.content));
+    }
+
+    pub fn checkpoint(self: JsonLexer) usize {
+        return self.idx;
+    }
+
+    pub fn restore(self: *JsonLexer, restore_point: usize) void  {
+        self.idx = restore_point;
     }
 
     fn consumeWhitespace(self: *JsonLexer) void {
@@ -194,7 +215,7 @@ const JsonLexer = struct {
         }
     }
 
-    fn scanIdentifier(self: *JsonLexer, ident: []const u8, on_match: JsonTokenType) ScanResult {
+    fn scanIdentifier(self: *JsonLexer, comptime ident: []const u8, comptime on_match: JsonTokenType) ScanResult {
         if (self.idx + ident.len > self.content.len) {
             return .invalid;
         }
@@ -249,48 +270,30 @@ const IngredientProperty = struct {
     value: []const u8,
 
     fn parseJson(lexer: *JsonLexer) !IngredientProperty {
-        const initial_lexer = lexer.*;
-        errdefer {
-            lexer.* = initial_lexer;
-        }
+        const lexer_cp = lexer.checkpoint();
+        errdefer lexer.restore(lexer_cp);
 
         _ = try lexer.expectToken(.object_start);
 
-        var id: ?[]const u8 = null;
-        var ingredient_id: ?[]const u8 = null;
-        var property_id: ?[]const u8 = null;
-        var out_value: ?[]const u8 = null;
+        var ret: IngredientProperty = undefined;
 
-        while (true) {
-            const key_or_end = lexer.next() orelse return error.UnfinishedObject;
-            switch (key_or_end.token_type)  {
-                .object_end => break,
-                .string => {},
-                else => return error.InvalidKey,
-            }
-            _ = try lexer.expectToken(.colon);
+        const Field = std.meta.FieldEnum(IngredientProperty);
 
-            const key_content = key_or_end.content(lexer.content);
-            if (std.mem.eql(u8, "id", key_content)) {
-                id = try lexer.nextAsString();
-            } else if (std.mem.eql(u8, "ingredient_id", key_content)) {
-                ingredient_id = try lexer.nextAsString();
-            } else if (std.mem.eql(u8, "property_id", key_content)) {
-                property_id = try lexer.nextAsString();
-            } else if (std.mem.eql(u8, "value", key_content)) {
-                out_value = try lexer.nextAsString();
-            } else {
+        while (try lexer.objectKeyOrEnd()) |key_s|{
+            const field = std.meta.stringToEnum(Field, key_s) orelse {
                 try lexer.discardJsonValue();
+                continue;
+            };
+
+            switch (field) {
+                .id => ret.id = try lexer.nextAsString(),
+                .ingredient_id => ret.ingredient_id = try lexer.nextAsString(),
+                .property_id => ret.property_id = try lexer.nextAsString(),
+                .value => ret.value = try lexer.nextAsString(),
             }
         }
 
-        return .{
-            .id = id orelse return error.MissingId,
-            .ingredient_id = ingredient_id orelse return error.MissingIngredientId,
-            .property_id = property_id orelse return error.MissingPropertyId,
-            .value = out_value orelse return error.MissingValue,
-        };
-
+        return ret;
     }
 };
 
@@ -302,8 +305,9 @@ const Ingredient = struct {
     serving_size_pieces: []const u8,
     properties: []IngredientProperty,
 
-    fn parseJson(alloc: std.mem.Allocator, blob: []const u8) !Ingredient {
-        var lexer = JsonLexer.init(blob);
+    fn parseJson(alloc: std.mem.Allocator, lexer: *JsonLexer) !Ingredient {
+        const lexer_cp = lexer.checkpoint();
+        errdefer lexer.restore(lexer_cp);
 
         _ = try lexer.expectToken(.object_start);
 
@@ -316,16 +320,8 @@ const Ingredient = struct {
         var serving_size_pieces: ?[]const u8 = null;
         var properties: std.ArrayListUnmanaged(IngredientProperty) = .{};
 
-        while (true) {
-            const key_or_end = lexer.next() orelse return error.UnfinishedObject;
-            switch (key_or_end.token_type)  {
-                .object_end => break,
-                .string => {},
-                else => return error.InvalidKey,
-            }
-            _ = try lexer.expectToken(.colon);
-
-            const key = std.meta.stringToEnum(IngredientProps, key_or_end.content(blob)) orelse {
+        while (try lexer.objectKeyOrEnd()) |key_s| {
+            const key = std.meta.stringToEnum(IngredientProps, key_s) orelse {
                 try lexer.discardJsonValue();
                 continue;
             };
@@ -339,7 +335,7 @@ const Ingredient = struct {
                 .properties => {
                     _ = try lexer.expectToken(.array_start);
                     while (true) {
-                        const property = IngredientProperty.parseJson(&lexer) catch {
+                        const property = IngredientProperty.parseJson(lexer) catch {
                             _ = try lexer.expectToken(.array_end);
                             break;
                         };
@@ -350,11 +346,11 @@ const Ingredient = struct {
         }
 
         return .{
-            .id = id orelse return error.MissingId,
-            .name = name orelse return error.MissingName,
-            .serving_size_g = serving_size_g orelse return error.MissingServingG,
-            .serving_size_ml = serving_size_ml orelse return error.MissingServingMl,
-            .serving_size_pieces = serving_size_pieces orelse return error.MissingServingPieces,
+            .id = id orelse return error.MissingField,
+            .name = name orelse return error.MissingField,
+            .serving_size_g = serving_size_g orelse return error.MissingField,
+            .serving_size_ml = serving_size_ml orelse return error.MissingField,
+            .serving_size_pieces = serving_size_pieces orelse return error.MissingField,
             .properties = properties.items,
         };
     }
@@ -364,30 +360,7 @@ pub export fn parse() void {
     var arena = std.heap.ArenaAllocator.init(std.heap.wasm_allocator);
     defer arena.deinit();
 
-    const value = Ingredient.parseJson(std.heap.wasm_allocator, wsr.getInputBuffer()) catch return;
+    var lexer = JsonLexer.init(wsr.getInputBuffer());
+    const value = Ingredient.parseJson(arena.allocator(), &lexer) catch return;
     wsr.writeStdout(value.name);
 }
-
-//pub fn main() !void {
-//    var gpa = std.heap.GeneralPurposeAllocator(.{}).init;
-//    defer _ = gpa.deinit();
-//
-//    var arena = std.heap.ArenaAllocator.init(gpa.allocator());
-//    defer arena.deinit();
-//
-//    const f = try std.fs.cwd().openFile("test.json", .{});
-//    const content = try f.readToEndAlloc(arena.allocator(), 1 << 20);
-//    std.debug.print("{s}\n", .{content});
-//
-//    var lexer = JsonLexer { .content = content };
-//    while (lexer.next()) |token| {
-//        std.debug.print("{s}: {s}\n", .{@tagName(token.token_type), content[token.start..token.end]});
-//        if (token.token_type == .invalid) {
-//            std.debug.print("{c}\n", .{content[lexer.idx]});
-//        }
-//        std.debug.assert(token.token_type != .invalid);
-//    }
-//
-//    const ingredient = try Ingredient.parseJson(arena.allocator(), content);
-//    std.debug.print("{any}\n", .{ingredient});
-//}
