@@ -1,6 +1,9 @@
 const std = @import("std");
 const wsr = @import("wsr.zig");
 const htmlgen = @import("htmlgen.zig");
+const json = @import("json.zig");
+
+pub const panic = wsr.panic;
 
 fn numberString(alloc: std.mem.Allocator, num: anytype) ![]const u8 {
     return try std.fmt.allocPrint(alloc, "{d}", .{num});
@@ -30,24 +33,29 @@ const PageBuilder = struct {
     fn handlePropertiesResponse() !void {
         const self = try getInstance();
         if (self.properties != null) return error.AlreadyInitialized;
-        self.properties = try std.json.parseFromSliceLeaky(
-            []Property,
-            std.heap.wasm_allocator,
-            wsr.getInputBuffer(),
-            .{ .ignore_unknown_fields = true, .allocate = .alloc_always },
-        );
+
+        var lexer = json.Lexer.init(wsr.getInputBuffer());
+        _ = try lexer.expectToken(.array_start);
+
+        var properties = std.ArrayList(Property).init(std.heap.wasm_allocator);
+        while (true) {
+            const property = Property.parseJson(std.heap.wasm_allocator, &lexer) catch {
+                _ = try lexer.expectToken(.array_end);
+                break;
+            };
+            try properties.append(property);
+
+        }
+        self.properties = try properties.toOwnedSlice();
         try self.buildIfReady();
     }
 
     fn handleIngredientResponse() !void {
         const self = try getInstance();
         if (self.ingredient != null) return error.AlreadyInitialized;
-        self.ingredient = try std.json.parseFromSliceLeaky(
-            Ingredient,
-            std.heap.wasm_allocator,
-            wsr.getInputBuffer(),
-            .{ .ignore_unknown_fields = true, .allocate = .alloc_always },
-        );
+
+        var lexer = json.Lexer.init(wsr.getInputBuffer());
+        self.ingredient = try Ingredient.parseJson(std.heap.wasm_allocator, &lexer);
         try self.buildIfReady();
     }
 
@@ -155,10 +163,8 @@ const Page = struct {
         var arena = makeArena();
         defer arena.deinit();
 
-        const new_value = try std.fmt.parseInt(i64, wsr.getInputBuffer(), 0);
-
         var req = IngredientModificationReq{};
-        @field(req, name) = new_value;
+        @field(req, name) = wsr.getInputBuffer();
 
         const body = try std.json.stringifyAlloc(
             arena.allocator(),
@@ -216,11 +222,90 @@ const Ingredient = struct {
     serving_size_ml: i64,
     serving_size_pieces: i64,
     properties: []IngredientProperty,
+
+    fn parseJson(alloc: std.mem.Allocator, lexer: *json.Lexer) !Ingredient {
+        const lexer_cp = lexer.checkpoint();
+        errdefer lexer.restore(lexer_cp);
+
+        _ = try lexer.expectToken(.object_start);
+        const Field = std.meta.FieldEnum(Ingredient);
+
+        var id: ?i64 = null;
+        var name: ?[]const u8 = null;
+        var serving_size_g: ?i64 = null;
+        var serving_size_ml: ?i64 = null;
+        var serving_size_pieces: ?i64 = null;
+        var properties = std.ArrayList(IngredientProperty).init(alloc);
+        defer properties.deinit();
+
+        while (try lexer.objectKeyOrEnd()) |key_s| {
+            const key = std.meta.stringToEnum(Field, key_s) orelse {
+                try lexer.discardValue();
+                continue;
+            };
+
+            switch (key) {
+                .id => id = try lexer.nextAsInt(i64),
+                .name => name = try alloc.dupe(u8, try lexer.nextAsString()),
+                .serving_size_g => serving_size_g = try lexer.nextAsInt(i64),
+                .serving_size_ml => serving_size_ml = try lexer.nextAsInt(i64),
+                .serving_size_pieces => serving_size_pieces = try lexer.nextAsInt(i64),
+                .properties => {
+                    _ = try lexer.expectToken(.array_start);
+                    while (true) {
+                        const property = IngredientProperty.parseJson(lexer) catch {
+                            _ = try lexer.expectToken(.array_end);
+                            break;
+                        };
+
+                        try properties.append(property);
+                    }
+                }
+            }
+        }
+
+        return .{
+            .id = id orelse return error.MissingField,
+            .name = name orelse return error.MissingField,
+            .serving_size_g = serving_size_g orelse return error.MissingField,
+            .serving_size_ml = serving_size_ml orelse return error.MissingField,
+            .serving_size_pieces = serving_size_pieces orelse return error.MissingField,
+            .properties = try properties.toOwnedSlice(),
+        };
+    }
 };
 
 const Property = struct {
     id: i64,
     name: []const u8,
+
+    fn parseJson(alloc: std.mem.Allocator, lexer: *json.Lexer) !Property {
+        const lexer_cp = lexer.checkpoint();
+        errdefer lexer.restore(lexer_cp);
+
+        _ = try lexer.expectToken(.object_start);
+        const Field = std.meta.FieldEnum(Property);
+
+        var id: ?i64 = null;
+        var name: ?[]const u8 = null;
+
+        while (try lexer.objectKeyOrEnd()) |key_s| {
+            const key = std.meta.stringToEnum(Field, key_s) orelse {
+                try lexer.discardValue();
+                continue;
+            };
+
+            switch (key) {
+                .id => id = try lexer.nextAsInt(i64),
+                .name => name = try alloc.dupe(u8, try lexer.nextAsString()),
+            }
+        }
+
+        return .{
+            .id = id orelse return error.MissingField,
+            .name = name orelse return error.MissingField,
+        };
+    }
 };
 
 const IngredientProperty = struct {
@@ -229,6 +314,40 @@ const IngredientProperty = struct {
     property_id: i64,
     // FIXME: FixedPointNum
     value: f32,
+
+    fn parseJson(lexer: *json.Lexer) !IngredientProperty {
+        const lexer_cp = lexer.checkpoint();
+        errdefer lexer.restore(lexer_cp);
+
+        _ = try lexer.expectToken(.object_start);
+        const Field = std.meta.FieldEnum(IngredientProperty);
+
+        var id: ?i64 = null;
+        var ingredient_id: ?i64 = null;
+        var property_id: ?i64 = null;
+        var value: ?f32 = null;
+
+        while (try lexer.objectKeyOrEnd()) |key_s| {
+            const key = std.meta.stringToEnum(Field, key_s) orelse {
+                try lexer.discardValue();
+                continue;
+            };
+
+            switch (key) {
+                .id => id = try lexer.nextAsInt(i64),
+                .ingredient_id => ingredient_id = try lexer.nextAsInt(i64),
+                .property_id => property_id = try lexer.nextAsInt(i64),
+                .value => value = try lexer.nextAsFloat(f32),
+            }
+        }
+
+        return .{
+            .id = id orelse return error.MissingField,
+            .ingredient_id = ingredient_id orelse return error.MissingField,
+            .property_id = property_id orelse return error.MissingField,
+            .value = value orelse return error.MissingField,
+        };
+    }
 };
 
 const IngredientPropertyMod = struct {
@@ -237,14 +356,18 @@ const IngredientPropertyMod = struct {
 };
 
 const IngredientModificationReq = struct {
-    serving_size_g: ?i64 = null,
-    serving_size_ml: ?i64 = null,
-    serving_size_pieces: ?i64 = null,
+    serving_size_g: ?[]const u8 = null,
+    serving_size_ml: ?[]const u8 = null,
+    serving_size_pieces: ?[]const u8 = null,
 };
 
 fn logFailure(value: anytype) void {
     value catch |e| {
         wsr.print("{s}", .{@errorName(e)});
+        const et = @errorReturnTrace();
+        if (et) |t| {
+            wsr.print("{}", .{t});
+        }
     };
 }
 
@@ -290,10 +413,12 @@ pub export fn pageInit() void {
 }
 
 pub export fn onIngredientResponse() void {
+    wsr.print("ingredient {s}\n", .{wsr.getInputBuffer()});
     logFailure(PageBuilder.handleIngredientResponse());
 }
 
 pub export fn onPropertiesResponse() void {
+    wsr.print("property\n", .{});
     logFailure(PageBuilder.handlePropertiesResponse());
 }
 
