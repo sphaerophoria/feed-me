@@ -1,7 +1,7 @@
 const std = @import("std");
 
 const imported = struct {
-    extern fn print(data: [*]u8, len: usize) void;
+    extern fn print(data: [*]const u8, len: usize) void;
     extern fn replaceSelfProperty(
         content_ptr: [*]const u8,
         content_len: usize,
@@ -151,6 +151,10 @@ pub fn print(comptime fmt: []const u8, args: anytype) void {
     var buf: [8192]u8 = undefined;
     const slice = std.fmt.bufPrint(&buf, fmt, args) catch &buf;
     imported.print(slice.ptr, slice.len);
+}
+
+pub fn writeStdout(buf: []const u8) void {
+    imported.print(buf.ptr, buf.len);
 }
 
 const Global = struct {

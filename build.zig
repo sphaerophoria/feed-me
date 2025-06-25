@@ -80,9 +80,20 @@ pub fn build(b: *std.Build) void {
     builder.addDependencies(exe.root_module);
     b.installArtifact(exe);
 
+    //const json = b.addExecutable(.{
+    //    .name = "json_test",
+    //    .root_source_file = b.path("src/json_parser.zig"),
+    //    .target = builder.target,
+    //    .optimize = builder.optimize,
+    //});
+    //json.root_module.addImport("sphtud", builder.sphtud);
+    //b.installArtifact(json);
+
     builder.makeRunTest("src/main.zig");
     builder.makeRunTest("src/wasm/htmlgen.zig");
 
     builder.makeWasmExe("ingredient", "src/wasm/ingredient.zig");
     builder.makeWasmExe("ingredients", "src/wasm/ingredients.zig");
+    builder.makeWasmExe("json_parser_2", "src/json_parser_2.zig");
+    builder.makeWasmExe("json_parser", "src/json_parser.zig");
 }

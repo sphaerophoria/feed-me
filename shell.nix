@@ -15,5 +15,8 @@ pkgs.mkShell {
     nodePackages.prettier
     nodePackages.jshint
     pyright
+    twiggy
+    wabt
+    binaryen
   ];
 }

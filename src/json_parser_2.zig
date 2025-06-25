@@ -2,19 +2,19 @@ const std = @import("std");
 const wsr = @import("wasm/wsr.zig");
 
 const Ingredient = struct {
-    id: i64,
+    id: []const u8,
     name: []const u8,
-    serving_size_g: f32,
-    serving_size_ml: f32,
-    serving_size_pieces: f32,
+    serving_size_g: []const u8,
+    serving_size_ml: []const u8,
+    serving_size_pieces: []const u8,
     properties: []IngredientProperty,
 };
 
 const IngredientProperty = struct {
-    id: i64,
-    ingredient_id: i64,
-    property_id: i64,
-    value: f32,
+    id: []const u8,
+    ingredient_id: []const u8,
+    property_id: []const u8,
+    value: []const u8,
 };
 
 pub export fn parse() void {
