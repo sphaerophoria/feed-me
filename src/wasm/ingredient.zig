@@ -2,15 +2,12 @@ const std = @import("std");
 const wsr = @import("wsr.zig");
 const htmlgen = @import("htmlgen.zig");
 const json = @import("json.zig");
+const common = @import("common.zig");
 
 pub const panic = wsr.panic;
 
 fn numberString(alloc: std.mem.Allocator, num: anytype) ![]const u8 {
     return try std.fmt.allocPrint(alloc, "{d}", .{num});
-}
-
-fn makeArena() std.heap.ArenaAllocator {
-    return std.heap.ArenaAllocator.init(std.heap.wasm_allocator);
 }
 
 const PageBuilder = struct {
@@ -84,7 +81,7 @@ const Page = struct {
     }
 
     fn makeIngredientContent(self: *Page) !void {
-        var arena = makeArena();
+        var arena = common.makeArena();
         defer arena.deinit();
 
         wsr.replaceElemProperty("title", self.ingredient.name, "value");
@@ -136,8 +133,7 @@ const Page = struct {
             try html_writer.attribute("wsr-generate", "onPropertyValueChange");
             try html_writer.attribute("type", "number");
 
-            const value_string = try numberString(arena.allocator(), ingredient_property.value);
-            try html_writer.attribute("value", value_string);
+            try html_writer.attribute("value", ingredient_property.value);
             try html_writer.selfClose();
             try html_writer.closeTag("div");
         }
@@ -146,7 +142,7 @@ const Page = struct {
     }
 
     fn servingSizeGChanged(self: *Page) !void {
-        var arena = makeArena();
+        var arena = common.makeArena();
         defer arena.deinit();
 
         const new_size = try std.fmt.parseInt(i64, wsr.getInputBuffer(), 0);
@@ -160,7 +156,7 @@ const Page = struct {
 
     fn handleComponentChanged(comptime name: []const u8) !void {
         const self = try getInstance();
-        var arena = makeArena();
+        var arena = common.makeArena();
         defer arena.deinit();
 
         var req = IngredientModificationReq{};
@@ -189,7 +185,7 @@ const Page = struct {
     }
 
     fn onPropertyValueChange() !void {
-        var arena = makeArena();
+        var arena = common.makeArena();
         defer arena.deinit();
 
         // FIXME: Do we still need all these argument types?
@@ -253,7 +249,7 @@ const Ingredient = struct {
                 .properties => {
                     _ = try lexer.expectToken(.array_start);
                     while (true) {
-                        const property = IngredientProperty.parseJson(lexer) catch {
+                        const property = IngredientProperty.parseJson(alloc, lexer) catch {
                             _ = try lexer.expectToken(.array_end);
                             break;
                         };
@@ -313,9 +309,9 @@ const IngredientProperty = struct {
     ingredient_id: i64,
     property_id: i64,
     // FIXME: FixedPointNum
-    value: f32,
+    value: []const u8,
 
-    fn parseJson(lexer: *json.Lexer) !IngredientProperty {
+    fn parseJson(alloc: std.mem.Allocator, lexer: *json.Lexer) !IngredientProperty {
         const lexer_cp = lexer.checkpoint();
         errdefer lexer.restore(lexer_cp);
 
@@ -325,7 +321,7 @@ const IngredientProperty = struct {
         var id: ?i64 = null;
         var ingredient_id: ?i64 = null;
         var property_id: ?i64 = null;
-        var value: ?f32 = null;
+        var value: ?[]const u8 = null;
 
         while (try lexer.objectKeyOrEnd()) |key_s| {
             const key = std.meta.stringToEnum(Field, key_s) orelse {
@@ -337,7 +333,7 @@ const IngredientProperty = struct {
                 .id => id = try lexer.nextAsInt(i64),
                 .ingredient_id => ingredient_id = try lexer.nextAsInt(i64),
                 .property_id => property_id = try lexer.nextAsInt(i64),
-                .value => value = try lexer.nextAsFloat(f32),
+                .value => value = try alloc.dupe(u8, try lexer.nextAsString()),
             }
         }
 
@@ -361,32 +357,23 @@ const IngredientModificationReq = struct {
     serving_size_pieces: ?[]const u8 = null,
 };
 
-fn logFailure(value: anytype) void {
-    value catch |e| {
-        wsr.print("{s}", .{@errorName(e)});
-        const et = @errorReturnTrace();
-        if (et) |t| {
-            wsr.print("{}", .{t});
-        }
-    };
-}
 
 pub export fn servingSizeGChanged() void {
-    logFailure(Page.handleComponentChanged("serving_size_g"));
+    common.logFailure(Page.handleComponentChanged("serving_size_g"));
 }
 
 pub export fn servingSizeMlChanged() void {
-    logFailure(Page.handleComponentChanged("serving_size_ml"));
+    common.logFailure(Page.handleComponentChanged("serving_size_ml"));
 }
 
 pub export fn servingSizePiecesChanged() void {
-    logFailure(Page.handleComponentChanged("serving_size_pieces"));
+    common.logFailure(Page.handleComponentChanged("serving_size_pieces"));
 }
 
 pub export fn pageInit() void {
     const failable = struct {
         fn f() !void {
-            var arena = makeArena();
+            var arena = common.makeArena();
             defer arena.deinit();
 
             _ = try PageBuilder.initInstance();
@@ -409,23 +396,21 @@ pub export fn pageInit() void {
         }
     }.f;
 
-    logFailure(failable());
+    common.logFailure(failable());
 }
 
 pub export fn onIngredientResponse() void {
-    wsr.print("ingredient {s}\n", .{wsr.getInputBuffer()});
-    logFailure(PageBuilder.handleIngredientResponse());
+    common.logFailure(PageBuilder.handleIngredientResponse());
 }
 
 pub export fn onPropertiesResponse() void {
-    wsr.print("property\n", .{});
-    logFailure(PageBuilder.handlePropertiesResponse());
+    common.logFailure(PageBuilder.handlePropertiesResponse());
 }
 
 pub export fn requestPropertyDelete() void {
     const failable = struct {
         fn f() !void {
-            var arena = makeArena();
+            var arena = common.makeArena();
             defer arena.deinit();
 
             wsr.getSelfAttribute("ingredient-property-id");
@@ -443,13 +428,13 @@ pub export fn requestPropertyDelete() void {
         }
     }.f;
 
-    logFailure(failable());
+    common.logFailure(failable());
 }
 
 pub export fn onPropertyDelete() void {
     const failable = struct {
         fn f() !void {
-            var arena = makeArena();
+            var arena = common.makeArena();
             defer arena.deinit();
 
             wsr.getSelfAttribute("delete-id");
@@ -457,9 +442,9 @@ pub export fn onPropertyDelete() void {
         }
     }.f;
 
-    logFailure(failable());
+    common.logFailure(failable());
 }
 
 pub export fn onPropertyValueChange() void {
-    logFailure(Page.onPropertyValueChange());
+    common.logFailure(Page.onPropertyValueChange());
 }

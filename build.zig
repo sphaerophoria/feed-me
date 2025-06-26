@@ -59,12 +59,19 @@ const Builder = struct {
             .target = self.wasm_target,
             .optimize = self.wasm_optimize,
         });
+        wasm_exe.root_module.addImport("sphtud", self.sphtud);
 
         wasm_exe.entry = .disabled;
         wasm_exe.rdynamic = true;
         wasm_exe.want_lto = true;
 
-        self.b.installArtifact(wasm_exe);
+        const cmd = self.b.addSystemCommand(&.{"gzip", "-9", "-c"});
+        cmd.addFileArg(wasm_exe.getEmittedBin());
+        const zipped = cmd.captureStdOut();
+
+        const name_with_extension = std.fmt.allocPrint(self.b.allocator, "{s}.wasm", .{name}) catch unreachable;
+        const install_zip = self.b.addInstallBinFile(zipped, name_with_extension);
+        self.b.getInstallStep().dependOn(&install_zip.step);
     }
 };
 

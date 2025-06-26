@@ -3,11 +3,18 @@
   <head>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <link rel="stylesheet" href="/water.css" />
-    <link rel="stylesheet" href="common.css" />
-    <script src="index.js" defer="true" type="module"></script>
+    <link rel="stylesheet" href="/common.css" />
+    <script src="wsr.js" wasm-url="/wasm/ingredients.wasm"></script>
+    <script src="header.js"></script>
   </head>
-  <h1>Ingredients</h1>
-  <div id="ingredient_list"></div>
-  <input id="ingredient_name" type="text" />
-  <button id="add_button">Add</button>
+  <body
+    wsr-get-1="/ingredients" wsr-generate-1="onIngredients"
+    wsr-get-2="/ingredient_categories" wsr-generate-2="onCategories"
+  >
+    <spheader-bar></spheader-bar>
+    <h1>Ingredients</h1>
+    <div id="ingredient_list"></div>
+    <input id="ingredient_name" type="text" wsr-onevent="keydown" wsr-generate="onNewInput"/>
+    <button id="add_button" wsr-onevent="click" wsr-generate="onAddClicked">Add</button>
+  </body>
 </html>

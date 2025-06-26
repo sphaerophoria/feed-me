@@ -16,6 +16,18 @@ const imported = struct {
         property_ptr: [*]const u8,
         property_len: usize,
     ) void;
+    extern fn getElemProperty(
+        elem_id_ptr: [*]const u8,
+        elem_id_len: usize,
+        property_ptr: [*]const u8,
+        property_len: usize,
+    ) void;
+    extern fn appendToElem(
+        elem_id_ptr: [*]const u8,
+        elem_id_len: usize,
+        content_ptr: [*]const u8,
+        content_len: usize,
+    ) void;
     extern fn requestFetch(
         url_ptr: [*]const u8,
         url_len: usize,
@@ -38,6 +50,13 @@ const imported = struct {
         prop_ptr: [*]const u8,
         prop_len: usize,
     ) void;
+    extern fn getEventProperty(
+        prop_ptr: [*]const u8,
+        prop_len: usize,
+    ) void;
+
+    extern fn captureBacktrace() void;
+    extern fn printCapturedBacktrace() void;
 };
 
 const exported = struct {
@@ -49,6 +68,10 @@ const exported = struct {
         const input_buffer = &Global.get().input_buffer;
         std.heap.wasm_allocator.free(input_buffer.*);
         input_buffer.* = std.heap.wasm_allocator.alloc(u8, size) catch return;
+    }
+
+    pub export fn crashycrashy() void {
+        @trap();
     }
 };
 
@@ -74,6 +97,24 @@ pub fn replaceElemProperty(elem_id: []const u8, content: []const u8, property: [
         content.len,
         property.ptr,
         property.len,
+    );
+}
+
+pub fn getElemProperty(elem_id: []const u8, property: []const u8) void {
+    imported.getElemProperty(
+        elem_id.ptr,
+        elem_id.len,
+        property.ptr,
+        property.len,
+    );
+}
+
+pub fn appendToElem(elem_id: []const u8, content: []const u8) void {
+    imported.appendToElem(
+        elem_id.ptr,
+        elem_id.len,
+        content.ptr,
+        content.len,
     );
 }
 
@@ -138,11 +179,15 @@ pub fn getSelfProperty(name: []const u8) void {
     imported.getSelfProperty(name.ptr, name.len);
 }
 
+pub fn getEventProperty(name: []const u8) void {
+    imported.getEventProperty(name.ptr, name.len);
+}
+
 pub fn panic(msg: []const u8, stack_trace: ?*std.builtin.StackTrace, return_address: ?usize) noreturn {
     _ = return_address;
     print("{s}", .{msg});
     if (stack_trace) |st| {
-        print("With stacktrace {}", .{st});
+        print("With stacktrace {any}", .{st.instruction_addresses});
     }
     @trap();
 }
@@ -155,6 +200,32 @@ pub fn print(comptime fmt: []const u8, args: anytype) void {
 
 pub fn writeStdout(buf: []const u8) void {
     imported.print(buf.ptr, buf.len);
+}
+
+pub fn captureBacktrace() void {
+    imported.captureBacktrace();
+}
+
+pub fn printCapturedBacktrace() void {
+    imported.printCapturedBacktrace();
+}
+
+pub fn attachWsrError(err: anytype) @TypeOf(err) {
+    const ti = @typeInfo(@TypeOf(err));
+    switch (ti) {
+        .error_set => {
+            captureBacktrace();
+            return err;
+        },
+        .error_union => {
+            return err catch |e| {
+                captureBacktrace();
+                return e;
+            };
+
+        },
+        else => @compileError("Not an error"),
+    }
 }
 
 const Global = struct {

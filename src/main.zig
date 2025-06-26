@@ -241,6 +241,7 @@ const HttpContext = struct {
                     .content_length = content.len,
                     .content_type = content_type,
                 });
+                try writer.appendHeader("Content-Encoding", "gzip");
                 try writer.writeBody(content);
             },
             .filesystem => |fs_path| {

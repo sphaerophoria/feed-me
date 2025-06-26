@@ -3,6 +3,8 @@ const wasm_url = document.currentScript.getAttribute("wasm-url");
 let wasm_obj = null;
 
 let current_node = null;
+let current_event = null;
+let last_error = null;
 
 function print(ptr, len) {
   if (wasm_obj === null) return;
@@ -10,6 +12,14 @@ function print(ptr, len) {
   const decoder = new TextDecoder();
   const s = decoder.decode(arr);
   console.log(s);
+}
+
+function captureBacktrace() {
+  last_error = new Error().stack;
+}
+
+function printCapturedBacktrace() {
+  console.log(last_error);
 }
 
 function getWasmString(ptr, len) {
@@ -42,7 +52,30 @@ function replaceElemProperty(
   node[property] = content;
 }
 
+function getElemProperty(
+  elem_id_ptr, elem_id_len,
+  property_ptr, property_len,
+) {
+  const elem_id = getWasmString(elem_id_ptr, elem_id_len);
+  const property = getWasmString(property_ptr, property_len);
+
+  const node = document.getElementById(elem_id);
+  setWasmInputBuffer(node[property]);
+}
+
+function appendToElem(
+  elem_id_ptr, elem_id_len,
+  content_ptr, content_len,
+) {
+  const elem_id = getWasmString(elem_id_ptr, elem_id_len);
+  const content = getWasmString(content_ptr, content_len);
+
+  const node = document.getElementById(elem_id);
+  node.innerHTML += content;
+}
+
 function setWasmInputBuffer(s) {
+  console.log(s);
   const encoder = new TextEncoder();
   const data = encoder.encode(s);
 
@@ -56,6 +89,12 @@ function setWasmInputBuffer(s) {
 function getSelfProperty(property_ptr, property_len) {
   const prop = getWasmString(property_ptr, property_len);
   setWasmInputBuffer(current_node[prop]);
+}
+
+function getEventProperty(property_ptr, property_len) {
+  const prop = getWasmString(property_ptr, property_len);
+  console.log(current_event, prop);
+  setWasmInputBuffer(current_event[prop]);
 }
 
 function getSelfAttribute(property_ptr, property_len) {
@@ -101,17 +140,39 @@ function requestFetch(
 }
 
 function callWasmTarget(elem, wasm_target) {
-    current_node = elem;
+  current_node = elem;
+  last_error = null;
+
+  try {
     wasm_obj.instance.exports[wasm_target]()
+  } catch (error) {
+    console.error(wasm_target, error);
+  }
 }
 
 function handleWsrGetters() {
-  const elems = document.querySelectorAll("[wsr-get]");
+  {
+    const elems = document.querySelectorAll("[wsr-get]");
 
-  for (const elem of elems) {
-    const url = elem.getAttribute("wsr-get");
-    const wasm_target = elem.getAttribute("wsr-generate");
-    callOnResponse(fetch(url), elem, wasm_target);
+    for (const elem of elems) {
+      const url = elem.getAttribute("wsr-get");
+      const wasm_target = elem.getAttribute("wsr-generate");
+      callOnResponse(fetch(url), elem, wasm_target);
+    }
+  }
+
+  {
+    const elems = document.querySelectorAll("[wsr-get-1]");
+    for (const elem of elems) {
+      let i = 1;
+      while (true) {
+        const url = elem.getAttribute(`wsr-get-${i}`);
+        if (url == null) break;
+        const wasm_target = elem.getAttribute(`wsr-generate-${i}`);
+        callOnResponse(fetch(url), elem, wasm_target);
+        i += 1;
+      }
+    }
   }
 }
 
@@ -119,8 +180,10 @@ function handleWsrGetters() {
 function bindWsrEvent(elem) {
   const event = elem.getAttribute("wsr-onevent");
   const wasm_target = elem.getAttribute("wsr-generate");
-  elem.addEventListener(event, () => {
+  elem.addEventListener(event, (ev) => {
+    current_event = ev;
     callWasmTarget(elem, wasm_target);
+    current_event = null;
   });
 }
 
@@ -181,10 +244,15 @@ async function init() {
   importObj = {
     env: {
       print: print,
+      captureBacktrace: captureBacktrace,
+      printCapturedBacktrace: printCapturedBacktrace,
       replaceElemProperty: replaceElemProperty,
       replaceSelfProperty: replaceSelfProperty,
       getSelfProperty: getSelfProperty,
       getSelfAttribute: getSelfAttribute,
+      getElemProperty: getElemProperty,
+      appendToElem: appendToElem,
+      getEventProperty: getEventProperty,
       requestFetch: requestFetch,
     },
   };
