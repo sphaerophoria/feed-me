@@ -4,16 +4,9 @@ const htmlgen = @import("htmlgen.zig");
 const wsr = @import("wsr.zig");
 const common = @import("common.zig");
 const json = @import("json.zig");
-const wsrErr = wsr.attachWsrError;
 
 pub const panic = wsr.panic;
-
-pub fn onReturnError() void {
-    const st = @errorReturnTrace().?;
-    if (st.index == 0) {
-        wsr.captureBacktrace(st.index);
-    }
-}
+pub const returnErrorHook = wsr.returnErrorHook;
 
 const Ingredient = struct {
     id: i64,
@@ -25,7 +18,7 @@ const Ingredient = struct {
         const lcp = lexer.checkpoint();
         errdefer lexer.restore(lcp);
 
-        _ = try wsrErr(lexer.expectToken(.object_start));
+        _ = try lexer.expectToken(.object_start);
 
         const Fields = enum { id, name, fully_entered, category_mappings };
 
@@ -34,24 +27,24 @@ const Ingredient = struct {
         var fully_entered: ?bool = null;
         var in_any_category: bool = false;
 
-        while (try wsrErr(lexer.objectKeyOrEnd())) |key_s| {
+        while (try lexer.objectKeyOrEnd()) |key_s| {
             const key = std.meta.stringToEnum(Fields, key_s) orelse {
-                try wsrErr(lexer.discardValue());
+                try lexer.discardValue();
                 continue;
             };
 
             switch (key) {
-                .id => id = try wsrErr(lexer.nextAsInt(i64)),
-                .name => name = try wsrErr(lexer.nextAsStringCopy(alloc)),
-                .fully_entered => fully_entered = try wsrErr(lexer.nextAsBool()),
+                .id => id = try lexer.nextAsInt(i64),
+                .name => name = try lexer.nextAsStringCopy(alloc),
+                .fully_entered => fully_entered = try lexer.nextAsBool(),
                 .category_mappings => in_any_category = try arrayNotEmpty(lexer),
             }
         }
 
         return .{
-            .id = id orelse return wsr.attachWsrError(error.MissingField),
-            .name = name orelse return wsr.attachWsrError(error.MissingField),
-            .fully_entered = fully_entered orelse return wsr.attachWsrError(error.MissingField),
+            .id = id orelse return error.MissingField,
+            .name = name orelse return error.MissingField,
+            .fully_entered = fully_entered orelse return error.MissingField,
             .in_any_category = in_any_category,
         };
     }
@@ -62,12 +55,12 @@ const Ingredient = struct {
         var is_empty: bool = true;
         while (true) {
             const lcp = lexer.checkpoint();
-            const token = lexer.next() orelse return wsrErr(error.NoArrayEnd);
+            const token = lexer.next() orelse return error.NoArrayEnd;
             switch (token.token_type) {
                 .array_end => return !is_empty,
                 .array_start, .object_start => {
                     lexer.restore(lcp);
-                    try wsrErr(lexer.discardValue());
+                    try lexer.discardValue();
                     is_empty = false;
                 },
                 else => {
@@ -96,23 +89,23 @@ const IngredientCategory = struct {
         var name: ?[]const u8 = null;
         var fully_entered: ?bool = null;
 
-        while (try wsrErr(lexer.objectKeyOrEnd())) |key_s| {
+        while (try lexer.objectKeyOrEnd()) |key_s| {
             const key = std.meta.stringToEnum(Fields, key_s) orelse {
-                try wsrErr(lexer.discardValue());
+                try lexer.discardValue();
                 continue;
             };
 
             switch (key) {
-                .id => id = try wsrErr(lexer.nextAsInt(i64)),
-                .name => name = try wsrErr(lexer.nextAsStringCopy(alloc)),
-                .fully_entered => fully_entered = try wsrErr(lexer.nextAsBool()),
+                .id => id = try lexer.nextAsInt(i64),
+                .name => name = try lexer.nextAsStringCopy(alloc),
+                .fully_entered => fully_entered = try lexer.nextAsBool(),
             }
         }
 
         return .{
-            .id = id orelse return wsrErr(error.MissingField),
-            .name = name orelse return wsrErr(error.MissingField),
-            .fully_entered = fully_entered orelse return wsrErr(error.MissingField),
+            .id = id orelse return error.MissingField,
+            .name = name orelse return error.MissingField,
+            .fully_entered = fully_entered orelse return error.MissingField,
         };
     }
 };
@@ -156,23 +149,23 @@ fn buildIfReady() !void {
     const ingredients = &ResponseHolder.instance.ingredients.?;
     const categories = &ResponseHolder.instance.categories.?;
 
-    var links = try wsrErr(sphtud.util.RuntimeBoundedArray(Link).init(arena.allocator(), ingredients.len + categories.len));
+    var links = try sphtud.util.RuntimeBoundedArray(Link).init(arena.allocator(), ingredients.len + categories.len);
     for (ingredients.*) |ingredient| {
         if (!ingredient.in_any_category) {
-            try wsrErr(links.append(.{
+            try links.append(.{
                 .name = ingredient.name,
-                .link_content = try wsrErr(std.fmt.allocPrint(arena.allocator(), "/ingredient.html?id={d}", .{ingredient.id})),
+                .link_content = try std.fmt.allocPrint(arena.allocator(), "/ingredient.html?id={d}", .{ingredient.id}),
                 .fully_entered = ingredient.fully_entered,
-            }));
+            });
         }
     }
 
     for (categories.*) |category| {
-        try wsrErr(links.append(.{
+        try links.append(.{
             .name = category.name,
-            .link_content = try wsrErr(std.fmt.allocPrint(arena.allocator(), "/ingredient_category.html?id={d}", .{category.id})),
+            .link_content = try std.fmt.allocPrint(arena.allocator(), "/ingredient_category.html?id={d}", .{category.id}),
             .fully_entered = category.fully_entered,
-        }));
+        });
     }
 
     std.mem.sort(Link, links.items, {}, struct {
@@ -185,7 +178,7 @@ fn buildIfReady() !void {
     var html_writer = htmlgen.htmlWriter((output.writer()));
 
     for (links.items) |link| {
-        try wsrErr(link.write(&html_writer));
+        try link.write(&html_writer);
     }
 
     wsr.replaceElemProperty("ingredient_list", output.items, "innerHTML");
@@ -198,7 +191,7 @@ fn parseIngredients() ![]Ingredient {
         }
     };
     var lexer = json.Lexer.init(wsr.getInputBuffer());
-    return try wsrErr(lexer.parseList(Ingredient, ParseCtx{}, std.heap.wasm_allocator));
+    return try lexer.parseList(Ingredient, ParseCtx{}, std.heap.wasm_allocator);
 }
 
 fn onIngredientsFailable() !void {
@@ -217,7 +210,7 @@ fn parseCategories() ![]IngredientCategory {
         }
     };
     var lexer = json.Lexer.init(wsr.getInputBuffer());
-    return try wsrErr(lexer.parseList(IngredientCategory, ParseCtx{}, std.heap.wasm_allocator));
+    return try lexer.parseList(IngredientCategory, ParseCtx{}, std.heap.wasm_allocator);
 }
 
 fn onCategoriesFailable() !void {
@@ -250,7 +243,7 @@ fn reqNewIngredient() !void {
 pub export fn onNewInput() void {
     wsr.getEventProperty("key");
     if (std.mem.eql(u8, wsr.getInputBuffer(), "Enter")) {
-        common.logFailure(wsrErr(reqNewIngredient()));
+        common.logFailure(reqNewIngredient());
     }
 }
 
@@ -259,16 +252,16 @@ fn onIngredientAddedFailable() !void {
     defer arena.deinit();
 
     var lexer = json.Lexer.init(wsr.getInputBuffer());
-    const new_ingredient = try wsrErr(Ingredient.parse(arena.allocator(), &lexer));
+    const new_ingredient = try Ingredient.parse(arena.allocator(), &lexer);
 
     var link = Link {
-        .link_content = try wsrErr(std.fmt.allocPrint(arena.allocator(), "/ingredient.html?id={d}", .{new_ingredient.id})),
+        .link_content = try std.fmt.allocPrint(arena.allocator(), "/ingredient.html?id={d}", .{new_ingredient.id}),
         .fully_entered = false,
         .name = new_ingredient.name,
     };
     var out_buf = std.ArrayList(u8).init(arena.allocator());
     var html_writer = htmlgen.htmlWriter(out_buf.writer());
-    try wsrErr(link.write(&html_writer));
+    try link.write(&html_writer);
     wsr.appendToElem("ingredient_list", out_buf.items);
 
     wsr.replaceElemProperty("ingredient_name", "", "value");
@@ -279,5 +272,5 @@ pub export fn onIngredientAdded() void {
 }
 
 pub export fn onAddClicked() void {
-    common.logFailure(wsrErr(reqNewIngredient()));
+    common.logFailure(reqNewIngredient());
 }

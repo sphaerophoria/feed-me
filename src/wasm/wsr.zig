@@ -55,8 +55,8 @@ const imported = struct {
         prop_len: usize,
     ) void;
 
-    extern fn captureBacktrace(idx: usize) void;
-    extern fn printCapturedBacktrace(idx: usize) void;
+    extern fn captureBacktrace() void;
+    extern fn printCapturedBacktrace() void;
 };
 
 const exported = struct {
@@ -192,6 +192,13 @@ pub fn panic(msg: []const u8, stack_trace: ?*std.builtin.StackTrace, return_addr
     @trap();
 }
 
+pub fn returnErrorHook() void {
+    const st = @errorReturnTrace().?;
+    if (st.index == 0) {
+        captureBacktrace();
+    }
+}
+
 pub fn print(comptime fmt: []const u8, args: anytype) void {
     var buf: [8192]u8 = undefined;
     const slice = std.fmt.bufPrint(&buf, fmt, args) catch &buf;
@@ -202,31 +209,12 @@ pub fn writeStdout(buf: []const u8) void {
     imported.print(buf.ptr, buf.len);
 }
 
-pub fn captureBacktrace(idx: usize) void {
-    imported.captureBacktrace(idx);
+pub fn captureBacktrace() void {
+    imported.captureBacktrace();
 }
 
-pub fn printCapturedBacktrace(idx: usize) void {
-    imported.printCapturedBacktrace(idx);
-}
-
-pub fn attachWsrError(err: anytype) @TypeOf(err) {
-    if (true) return err;
-    const ti = @typeInfo(@TypeOf(err));
-    switch (ti) {
-        .error_set => {
-            captureBacktrace();
-            return err;
-        },
-        .error_union => {
-            return err catch |e| {
-                captureBacktrace();
-                return e;
-            };
-
-        },
-        else => @compileError("Not an error"),
-    }
+pub fn printCapturedBacktrace() void {
+    imported.printCapturedBacktrace();
 }
 
 const Global = struct {

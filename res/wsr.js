@@ -14,12 +14,12 @@ function print(ptr, len) {
   console.log(s);
 }
 
-function captureBacktrace(idx) {
-  last_error.set(idx, new Error().stack);
+function captureBacktrace() {
+  last_error = new Error().stack;
 }
 
-function printCapturedBacktrace(idx) {
-  console.log(last_error.get(idx));
+function printCapturedBacktrace() {
+  console.log(last_error);
 }
 
 function getWasmString(ptr, len) {
@@ -141,7 +141,7 @@ function requestFetch(
 
 function callWasmTarget(elem, wasm_target) {
   current_node = elem;
-  last_error = new Map();
+  last_error = null;
 
   try {
     wasm_obj.instance.exports[wasm_target]()

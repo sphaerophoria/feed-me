@@ -11,12 +11,16 @@
         const url = new URL(window.location.href);
         const ingredient_id = url.searchParams.get("id");
         document.body["ingredient_id"] = ingredient_id;
+        document.body.setAttribute("wsr-get-1", `/ingredients/${ingredient_id}`);
       };
     </script>
     <script src="wsr.js" wasm-url="/wasm/ingredient.wasm"></script>
   </head>
-  <!-- wsr-get is dynamic and injected by js above -->
-  <body wsr-immediate="pageInit">
+  <!-- wsr-get-1 is dynamic and injected by js above -->
+  <body
+    wsr-generate-1="onIngredientResponse"
+    wsr-get-2="/properties" wsr-generate-2="onPropertiesResponse"
+  >
     <input id="title" class="common_edit_title" type="text" />
     <h2>Serving Info</h2>
     <div id="ingredient_values" class="common_grid">

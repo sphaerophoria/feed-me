@@ -5,6 +5,7 @@ const json = @import("json.zig");
 const common = @import("common.zig");
 
 pub const panic = wsr.panic;
+pub const returnErrorHook = wsr.returnErrorHook;
 
 fn numberString(alloc: std.mem.Allocator, num: anytype) ![]const u8 {
     return try std.fmt.allocPrint(alloc, "{d}", .{num});
@@ -14,36 +15,24 @@ const PageBuilder = struct {
     ingredient: ?Ingredient = null,
     properties: ?[]Property = null,
 
-    var instance: ?PageBuilder = null;
-
-    fn initInstance() !*PageBuilder {
-        if (instance != null) return error.AlreadyInitialized;
-        instance = .{};
-        return &instance.?;
-    }
+    var instance: PageBuilder = .{};
 
     fn getInstance() !*PageBuilder {
-        if (instance == null) return error.NotInitialized;
-        return &instance.?;
+        return &instance;
     }
 
     fn handlePropertiesResponse() !void {
         const self = try getInstance();
         if (self.properties != null) return error.AlreadyInitialized;
 
+        const ParseCtx = struct {
+            pub fn parse(_: @This(), l: *json.Lexer) !Property {
+                return Property.parseJson(std.heap.wasm_allocator, l);
+            }
+        };
+
         var lexer = json.Lexer.init(wsr.getInputBuffer());
-        _ = try lexer.expectToken(.array_start);
-
-        var properties = std.ArrayList(Property).init(std.heap.wasm_allocator);
-        while (true) {
-            const property = Property.parseJson(std.heap.wasm_allocator, &lexer) catch {
-                _ = try lexer.expectToken(.array_end);
-                break;
-            };
-            try properties.append(property);
-
-        }
-        self.properties = try properties.toOwnedSlice();
+        self.properties = try lexer.parseList(Property, ParseCtx{}, std.heap.wasm_allocator);
         try self.buildIfReady();
     }
 
@@ -375,8 +364,6 @@ pub export fn pageInit() void {
         fn f() !void {
             var arena = common.makeArena();
             defer arena.deinit();
-
-            _ = try PageBuilder.initInstance();
 
             wsr.getSelfProperty("ingredient_id");
             const id = try std.fmt.parseInt(i64, wsr.getInputBuffer(), 0);
