@@ -1,4 +1,3 @@
-import * as header from "./header.js";
 import {
   Ingredient,
   makeProperties,
@@ -133,8 +132,6 @@ function appendCategoryNode(category_id) {
 }
 
 async function init() {
-  header.prependHeaderToBody();
-
   await Promise.all([
     ingredient.initFromServer(),
     properties.initFromServer(),

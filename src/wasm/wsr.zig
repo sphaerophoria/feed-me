@@ -55,8 +55,8 @@ const imported = struct {
         prop_len: usize,
     ) void;
 
-    extern fn captureBacktrace() void;
-    extern fn printCapturedBacktrace() void;
+    extern fn captureBacktrace(idx: usize) void;
+    extern fn printCapturedBacktrace(idx: usize) void;
 };
 
 const exported = struct {
@@ -202,15 +202,16 @@ pub fn writeStdout(buf: []const u8) void {
     imported.print(buf.ptr, buf.len);
 }
 
-pub fn captureBacktrace() void {
-    imported.captureBacktrace();
+pub fn captureBacktrace(idx: usize) void {
+    imported.captureBacktrace(idx);
 }
 
-pub fn printCapturedBacktrace() void {
-    imported.printCapturedBacktrace();
+pub fn printCapturedBacktrace(idx: usize) void {
+    imported.printCapturedBacktrace(idx);
 }
 
 pub fn attachWsrError(err: anytype) @TypeOf(err) {
+    if (true) return err;
     const ti = @typeInfo(@TypeOf(err));
     switch (ti) {
         .error_set => {

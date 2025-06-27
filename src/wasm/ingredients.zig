@@ -8,6 +8,13 @@ const wsrErr = wsr.attachWsrError;
 
 pub const panic = wsr.panic;
 
+pub fn onReturnError() void {
+    const st = @errorReturnTrace().?;
+    if (st.index == 0) {
+        wsr.captureBacktrace(st.index);
+    }
+}
+
 const Ingredient = struct {
     id: i64,
     name: []const u8,
