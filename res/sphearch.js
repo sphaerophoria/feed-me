@@ -141,7 +141,6 @@ class Sphearch extends HTMLElement {
     for (let i = 0; i < words.length; i++) {
       const word = words[i];
       const div = document.createElement("div");
-      div.classList.add("sphearch-bar-result");
       div.innerText = word;
       div.onclick = () => {
         this.executeSelection();
@@ -174,12 +173,9 @@ sheet.replaceSync(
     width: 100%;
   }
 
-  .sphearch-bar-result {
+  sphearch-bar > div > *{
     margin-left: 1em;
     margin-right;
-  }
-
-  .sphearch-bar-result {
     padding-left: 1em;
     padding-right: 1em;
   }

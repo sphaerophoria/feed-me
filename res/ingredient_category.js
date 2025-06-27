@@ -1,4 +1,3 @@
-import * as header from "./header.js";
 import { IngredientCategory, makeIngredients } from "./data.js";
 import "./sphdelete-button.js";
 
@@ -36,7 +35,6 @@ function appendLink(mapping, node) {
 }
 
 async function init() {
-  header.prependHeaderToBody();
 
   await Promise.all([
     ingredient_category.initFromServer(),

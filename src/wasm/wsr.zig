@@ -11,7 +11,7 @@ const imported = struct {
     extern fn replaceElemProperty(
         elem_id_ptr: [*]const u8,
         elem_id_len: usize,
-        content_ptr: [*]const u8,
+        content_ptr: i32,
         content_len: usize,
         property_ptr: [*]const u8,
         property_len: usize,
@@ -93,8 +93,19 @@ pub fn replaceElemProperty(elem_id: []const u8, content: []const u8, property: [
     imported.replaceElemProperty(
         elem_id.ptr,
         elem_id.len,
-        content.ptr,
+        @bitCast(@intFromPtr(content.ptr)),
         content.len,
+        property.ptr,
+        property.len,
+    );
+}
+
+pub fn replaceElemPropertyInt(elem_id: []const u8, content: i32, property: []const u8) void {
+    imported.replaceElemProperty(
+        elem_id.ptr,
+        elem_id.len,
+        content,
+        std.math.maxInt(usize),
         property.ptr,
         property.len,
     );
@@ -124,13 +135,14 @@ pub fn deleteElemByQuery(query: []const u8) void {
 
 // FIXME: Deprecated
 pub fn requestPut(url: []const u8, body: []const u8) void {
+    const put = "PUT";
     imported.requestFetch(
         url.ptr,
         url.len,
         body.ptr,
         body.len,
-        undefined,
-        0,
+        put.ptr,
+        put.len,
         undefined,
         0,
     );

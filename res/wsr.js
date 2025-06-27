@@ -23,6 +23,7 @@ function printCapturedBacktrace() {
 }
 
 function getWasmString(ptr, len) {
+  if (len < 0) return ptr;
   if (len == 0) return "";
   const output_buf = new Uint8Array(wasm_obj.instance.exports.memory.buffer, ptr, len);
   const decoder = new TextDecoder();
@@ -75,14 +76,15 @@ function appendToElem(
 }
 
 function setWasmInputBuffer(s) {
-  console.log(s);
   const encoder = new TextEncoder();
   const data = encoder.encode(s);
 
   wasm_obj.instance.exports.allocateInputBuffer(data.length);
-  const input_buffer_ptr = wasm_obj.instance.exports.getInputBuffer();
-  const input_buffer = new Uint8Array(wasm_obj.instance.exports.memory.buffer, input_buffer_ptr, data.length);
-  input_buffer.set(data);
+  if (data.length != 0) {
+    const input_buffer_ptr = wasm_obj.instance.exports.getInputBuffer();
+    const input_buffer = new Uint8Array(wasm_obj.instance.exports.memory.buffer, input_buffer_ptr, data.length);
+    input_buffer.set(data);
+  }
 
 }
 
@@ -93,7 +95,6 @@ function getSelfProperty(property_ptr, property_len) {
 
 function getEventProperty(property_ptr, property_len) {
   const prop = getWasmString(property_ptr, property_len);
-  console.log(current_event, prop);
   setWasmInputBuffer(current_event[prop]);
 }
 
@@ -136,7 +137,11 @@ function requestFetch(
     params.body = body;
   }
 
-  callOnResponse(fetch(url, params), current_node, callback);
+  if (callback.length > 0) {
+    callOnResponse(fetch(url, params), current_node, callback);
+  } else {
+    fetch(url, params)
+  }
 }
 
 function callWasmTarget(elem, wasm_target) {
