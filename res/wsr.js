@@ -72,7 +72,7 @@ function appendToElem(
   const content = getWasmString(content_ptr, content_len);
 
   const node = document.getElementById(elem_id);
-  node.innerHTML += content;
+  node.insertAdjacentHTML('beforeend', content);
 }
 
 function setWasmInputBuffer(s) {
@@ -187,6 +187,7 @@ function bindWsrEvent(elem) {
   const wasm_target = elem.getAttribute("wsr-generate");
   elem.addEventListener(event, (ev) => {
     current_event = ev;
+    if (current_event.target.value) console.log(current_event.target.value);
     callWasmTarget(elem, wasm_target);
     current_event = null;
   });
@@ -236,6 +237,7 @@ function handleMutation(records) {
   }
 }
 
+var wsrCallbacks = {};
 
 async function init() {
   const observerOptions = {
@@ -261,6 +263,10 @@ async function init() {
       requestFetch: requestFetch,
     },
   };
+
+  for (let key in wsrCallbacks) {
+    importObj.env[key] = wsrCallbacks[key];
+  }
 
   wasm_obj = await WebAssembly.instantiateStreaming(
     fetch(wasm_url),

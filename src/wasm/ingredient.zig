@@ -7,6 +7,8 @@ const common = @import("common.zig");
 pub const panic = wsr.panic;
 pub const returnErrorHook = wsr.returnErrorHook;
 
+extern fn focusWidget(key_ptr: [*]const u8, key_len: usize) void;
+
 fn numberString(alloc: std.mem.Allocator, num: anytype) ![]const u8 {
     return try std.fmt.allocPrint(alloc, "{d}", .{num});
 }
@@ -30,7 +32,6 @@ const IngredientCategory = struct {
             switch (key) {
                 .id => id = try lexer.nextAsInt(i64),
                 .name => name = try lexer.nextAsStringCopy(alloc),
-
             }
         }
 
@@ -183,7 +184,7 @@ const Page = struct {
 
         var html_writer = htmlgen.htmlWriter(property_buf.writer());
         for (self.ingredient.properties) |ingredient_property| {
-            try self.writeProperty(arena.allocator(), &html_writer, ingredient_property);
+            _ = try self.writeProperty(arena.allocator(), &html_writer, ingredient_property);
         }
 
         wsr.replaceElemProperty("ingredient_properties", property_buf.items, "innerHTML");
@@ -201,10 +202,10 @@ const Page = struct {
     }
 
 
-    fn writeProperty(self: *Page, scratch: std.mem.Allocator, html_writer: anytype, ingredient_property: IngredientProperty) !void {
+    fn writeProperty(self: *Page, scratch: std.mem.Allocator, html_writer: anytype, ingredient_property: IngredientProperty) ![]const u8 {
         const property = self.propertyById(ingredient_property.property_id) orelse {
             wsr.print("ERROR: Missing property id: {d}", .{ingredient_property.property_id});
-            return;
+            return &.{};
         };
 
         const ingredient_property_id_string = try numberString(scratch, ingredient_property.id);
@@ -231,7 +232,9 @@ const Page = struct {
         try html_writer.closeTag("label");
 
         try html_writer.openTag("input");
-        try html_writer.attribute("wsr-onevent", "change");
+        const input_id = try std.fmt.allocPrint(scratch, "property-input-{d}", .{ingredient_property.id});
+        try html_writer.attribute("id", input_id);
+        try html_writer.attribute("wsr-onevent", "keyup");
         try html_writer.attribute("wsr-generate", "onPropertyValueChange");
         try html_writer.attribute("ingredient-property-id", ingredient_property_id_string);
         try html_writer.attribute("type", "number");
@@ -239,6 +242,8 @@ const Page = struct {
         try html_writer.attribute("value", ingredient_property.value);
         try html_writer.selfClose();
         try html_writer.closeTag("div");
+
+        return input_id;
     }
 
     fn writeSearchResult(scratch: std.mem.Allocator, writer: anytype, property: Property) !void {
@@ -297,13 +302,22 @@ const Page = struct {
         var arena = common.makeArena();
         defer arena.deinit();
 
+        wsr.getEventProperty("key");
+        if (std.mem.eql(u8, wsr.getInputBuffer(), "Enter")) {
+            const new_property_id = "new_property";
+            focusWidget(new_property_id, new_property_id.len);
+        }
+
         // FIXME: Do we still need all these argument types?
         wsr.getSelfAttribute("ingredient-property-id");
         const id_s = try arena.allocator().dupe(u8, wsr.getInputBuffer());
 
         wsr.getSelfProperty("value");
-        const value_s = try arena.allocator().dupe(u8, wsr.getInputBuffer());
+        const value_s = wsr.getInputBuffer();
 
+        if (value_s.len == 0) {
+            return;
+        }
         const url = try std.fmt.allocPrint(arena.allocator(), "/ingredient_properties/{s}", .{id_s});
         const body = try std.json.stringifyAlloc(
             arena.allocator(),
@@ -382,9 +396,11 @@ const Page = struct {
 
         var out_buf = std.ArrayList(u8).init(arena.allocator());
         var html_writer = htmlgen.htmlWriter(out_buf.writer());
-        try self.writeProperty(arena.allocator(), &html_writer, new_prop);
+        const input_id = try self.writeProperty(arena.allocator(), &html_writer, new_prop);
 
         wsr.appendToElem("ingredient_properties", out_buf.items);
+        wsr.replaceElemProperty("new_property", "", "value");
+        focusWidget(input_id.ptr, input_id.len);
     }
 
     fn onPropertySearchInput() !void {

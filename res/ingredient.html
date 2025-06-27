@@ -5,8 +5,10 @@
     <link rel="stylesheet" href="/water.css" />
     <link rel="stylesheet" href="/common.css" />
     <link rel="stylesheet" href="ingredient.css" />
+    <script src="header.js"></script>
     <script src="sphdelete-button.js"></script>
     <script src="sphearch2.js"></script>
+    <script src="wsr.js" wasm-url="/wasm/ingredient.wasm"></script>
     <script>
       window.onload = () => {
         const url = new URL(window.location.href);
@@ -14,8 +16,15 @@
         document.body["ingredient_id"] = ingredient_id;
         document.body.setAttribute("wsr-get-1", `/ingredients/${ingredient_id}`);
       };
+      wsrCallbacks.focusWidget = function(id_ptr, id_len) {
+        const id = getWasmString(id_ptr, id_len);
+        const elem = document.getElementById(id);
+        elem.focus();
+        if (elem.select !== undefined) {
+          elem.select();
+        }
+      }
     </script>
-    <script src="wsr.js" wasm-url="/wasm/ingredient.wasm"></script>
   </head>
   <!-- wsr-get-1 is dynamic and injected by js above -->
   <body
@@ -23,6 +32,7 @@
     wsr-get-2="/properties" wsr-generate-2="onPropertiesResponse"
     wsr-get-3="/ingredient_categories" wsr-generate-3="onCategoriesResponse"
   >
+    <spheader-bar></spheader-bar>
     <input id="title" class="common_edit_title" type="text" />
     <input type="checkbox" id="complete_checkbox" wsr-onevent="click" wsr-generate="onCompleteChecked" />
     <label for="complete_checkbox"

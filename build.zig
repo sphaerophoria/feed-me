@@ -104,4 +104,5 @@ pub fn build(b: *std.Build) void {
     builder.makeWasmExe("json_parser_2", "src/json_parser_2.zig");
     builder.makeWasmExe("json_parser", "src/wasm/json_test.zig");
     builder.makeWasmExe("example", "src/wasm/example.zig");
+    builder.makeWasmExe("ingredient_category", "src/wasm/ingredient_category.zig");
 }
