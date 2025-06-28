@@ -65,12 +65,11 @@ const Ingredient = struct {
                 },
                 else => {
                     is_empty = false;
-                }
+                },
             }
         }
     }
 };
-
 
 const IngredientCategory = struct {
     id: i64,
@@ -254,7 +253,7 @@ fn onIngredientAddedFailable() !void {
     var lexer = json.Lexer.init(wsr.getInputBuffer());
     const new_ingredient = try Ingredient.parse(arena.allocator(), &lexer);
 
-    var link = Link {
+    var link = Link{
         .link_content = try std.fmt.allocPrint(arena.allocator(), "/ingredient.html?id={d}", .{new_ingredient.id}),
         .fully_entered = false,
         .name = new_ingredient.name,

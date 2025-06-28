@@ -10,14 +10,21 @@
       window.onload = () => {
         const url = new URL(window.location.href);
         const category_id = url.searchParams.get("id");
-        document.body.setAttribute("wsr-get-1", `/ingredient_categories/${category_id}`);
+        document.body.setAttribute(
+          "wsr-get-1",
+          `/ingredient_categories/${category_id}`,
+        );
       };
     </script>
     <script src="sphearch2.js"></script>
     <script src="sphdelete-button.js"></script>
     <script src="header.js"></script>
   </head>
-  <body wsr-generate-1="onCategory" wsr-get-2="/ingredients" wsr-generate-2="onIngredients">
+  <body
+    wsr-generate-1="onCategory"
+    wsr-get-2="/ingredients"
+    wsr-generate-2="onIngredients"
+  >
     <spheader-bar></spheader-bar>
     <input id="category_name_edit" class="common_edit_title" type="text" />
     <h2>Ingredients</h2>

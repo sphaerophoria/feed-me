@@ -18,7 +18,7 @@ const IngredientProperty = struct {
 
         const Field = std.meta.FieldEnum(IngredientProperty);
 
-        while (try lexer.objectKeyOrEnd()) |key_s|{
+        while (try lexer.objectKeyOrEnd()) |key_s| {
             const field = std.meta.stringToEnum(Field, key_s) orelse {
                 try lexer.discardValue();
                 continue;

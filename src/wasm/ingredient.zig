@@ -40,7 +40,6 @@ const IngredientCategory = struct {
             .name = name orelse return error.MissingField,
         };
     }
-
 };
 
 const PageBuilder = struct {
@@ -73,7 +72,6 @@ const PageBuilder = struct {
 
                     const category = try IngredientCategory.parseJson(std.heap.wasm_allocator, &lexer);
                     try ret.put(category.id, category.name);
-
                 },
                 else => return error.UnexpectedToken,
             }
@@ -119,7 +117,7 @@ const PageBuilder = struct {
     }
 };
 
-fn boolString(val: bool)  []const u8 {
+fn boolString(val: bool) []const u8 {
     if (val) return "true" else return "false";
 }
 
@@ -200,7 +198,6 @@ const Page = struct {
             wsr.replaceElemProperty("new_property", search_result_buf.items, "elems");
         }
     }
-
 
     fn writeProperty(self: *Page, scratch: std.mem.Allocator, html_writer: anytype, ingredient_property: IngredientProperty) ![]const u8 {
         const property = self.propertyById(ingredient_property.property_id) orelse {
@@ -589,7 +586,7 @@ const IngredientProperty = struct {
                         end_idx -= 1;
                     }
                     value = try alloc.dupe(u8, tmp[0..end_idx]);
-                }
+                },
             }
         }
 
@@ -613,7 +610,6 @@ const IngredientModificationReq = struct {
     serving_size_pieces: ?[]const u8 = null,
     fully_entered: ?bool = null,
 };
-
 
 pub export fn servingSizeGChanged() void {
     wsr.getSelfProperty("value");
@@ -702,7 +698,6 @@ pub export fn onCompleteChecked() void {
 pub export fn onAddPropertySelect() void {
     common.logFailure(Page.onAddPropertySelect());
 }
-
 
 pub export fn onPropertyAdded() void {
     common.logFailure(Page.onPropertyAdded());

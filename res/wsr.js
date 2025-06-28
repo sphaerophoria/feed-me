@@ -25,14 +25,20 @@ function printCapturedBacktrace() {
 function getWasmString(ptr, len) {
   if (len < 0) return ptr;
   if (len == 0) return "";
-  const output_buf = new Uint8Array(wasm_obj.instance.exports.memory.buffer, ptr, len);
+  const output_buf = new Uint8Array(
+    wasm_obj.instance.exports.memory.buffer,
+    ptr,
+    len,
+  );
   const decoder = new TextDecoder();
   return decoder.decode(output_buf);
 }
 
 function replaceSelfProperty(
-  content_ptr, content_len,
-  property_ptr, property_len,
+  content_ptr,
+  content_len,
+  property_ptr,
+  property_len,
 ) {
   const content = getWasmString(content_ptr, content_len);
   const property = getWasmString(property_ptr, property_len);
@@ -41,9 +47,12 @@ function replaceSelfProperty(
 }
 
 function replaceElemProperty(
-  elem_id_ptr, elem_id_len,
-  content_ptr, content_len,
-  property_ptr, property_len,
+  elem_id_ptr,
+  elem_id_len,
+  content_ptr,
+  content_len,
+  property_ptr,
+  property_len,
 ) {
   const elem_id = getWasmString(elem_id_ptr, elem_id_len);
   const content = getWasmString(content_ptr, content_len);
@@ -53,10 +62,7 @@ function replaceElemProperty(
   node[property] = content;
 }
 
-function getElemProperty(
-  elem_id_ptr, elem_id_len,
-  property_ptr, property_len,
-) {
+function getElemProperty(elem_id_ptr, elem_id_len, property_ptr, property_len) {
   const elem_id = getWasmString(elem_id_ptr, elem_id_len);
   const property = getWasmString(property_ptr, property_len);
 
@@ -64,15 +70,12 @@ function getElemProperty(
   setWasmInputBuffer(node[property]);
 }
 
-function appendToElem(
-  elem_id_ptr, elem_id_len,
-  content_ptr, content_len,
-) {
+function appendToElem(elem_id_ptr, elem_id_len, content_ptr, content_len) {
   const elem_id = getWasmString(elem_id_ptr, elem_id_len);
   const content = getWasmString(content_ptr, content_len);
 
   const node = document.getElementById(elem_id);
-  node.insertAdjacentHTML('beforeend', content);
+  node.insertAdjacentHTML("beforeend", content);
 }
 
 function setWasmInputBuffer(s) {
@@ -82,10 +85,13 @@ function setWasmInputBuffer(s) {
   wasm_obj.instance.exports.allocateInputBuffer(data.length);
   if (data.length != 0) {
     const input_buffer_ptr = wasm_obj.instance.exports.getInputBuffer();
-    const input_buffer = new Uint8Array(wasm_obj.instance.exports.memory.buffer, input_buffer_ptr, data.length);
+    const input_buffer = new Uint8Array(
+      wasm_obj.instance.exports.memory.buffer,
+      input_buffer_ptr,
+      data.length,
+    );
     input_buffer.set(data);
   }
-
 }
 
 function getSelfProperty(property_ptr, property_len) {
@@ -105,25 +111,35 @@ function getSelfAttribute(property_ptr, property_len) {
 }
 
 function callOnResponse(fetch_promise, elem, wasm_target) {
-  fetch_promise.then((response) => response.bytes()).then((body) => {
-    wasm_obj.instance.exports.allocateInputBuffer(body.length);
-    const input_buffer_ptr = wasm_obj.instance.exports.getInputBuffer();
+  fetch_promise
+    .then((response) => response.bytes())
+    .then((body) => {
+      wasm_obj.instance.exports.allocateInputBuffer(body.length);
+      const input_buffer_ptr = wasm_obj.instance.exports.getInputBuffer();
 
-    if (body.length > 0) {
-      const input_buffer = new Uint8Array(wasm_obj.instance.exports.memory.buffer, input_buffer_ptr, body.length);
-      input_buffer.set(body);
-    }
+      if (body.length > 0) {
+        const input_buffer = new Uint8Array(
+          wasm_obj.instance.exports.memory.buffer,
+          input_buffer_ptr,
+          body.length,
+        );
+        input_buffer.set(body);
+      }
 
-    callWasmTarget(elem, wasm_target);
-  });
+      callWasmTarget(elem, wasm_target);
+    });
 }
 
 function requestFetch(
-  url_ptr, url_len,
-  body_ptr, body_len,
-  method_ptr, method_len,
+  url_ptr,
+  url_len,
+  body_ptr,
+  body_len,
+  method_ptr,
+  method_len,
   // FIXME: Can we just give a fn pointer directly?
-  callback_ptr, callback_len,
+  callback_ptr,
+  callback_len,
 ) {
   const url = getWasmString(url_ptr, url_len);
   const body = getWasmString(body_ptr, body_len);
@@ -140,7 +156,7 @@ function requestFetch(
   if (callback.length > 0) {
     callOnResponse(fetch(url, params), current_node, callback);
   } else {
-    fetch(url, params)
+    fetch(url, params);
   }
 }
 
@@ -149,7 +165,7 @@ function callWasmTarget(elem, wasm_target) {
   last_error = null;
 
   try {
-    wasm_obj.instance.exports[wasm_target]()
+    wasm_obj.instance.exports[wasm_target]();
   } catch (error) {
     console.error(wasm_target, error);
   }
@@ -180,7 +196,6 @@ function handleWsrGetters() {
     }
   }
 }
-
 
 function bindWsrEvent(elem) {
   const event = elem.getAttribute("wsr-onevent");
@@ -267,15 +282,11 @@ async function init() {
     importObj.env[key] = wsrCallbacks[key];
   }
 
-  wasm_obj = await WebAssembly.instantiateStreaming(
-    fetch(wasm_url),
-    importObj,
-  );
+  wasm_obj = await WebAssembly.instantiateStreaming(fetch(wasm_url), importObj);
 
   handleWsrGetters();
   handleWsrOnEvent();
   handleWsrImmediate();
 }
-
 
 window.addEventListener("load", init);

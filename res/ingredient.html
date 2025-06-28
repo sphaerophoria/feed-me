@@ -14,32 +14,46 @@
         const url = new URL(window.location.href);
         const ingredient_id = url.searchParams.get("id");
         document.body["ingredient_id"] = ingredient_id;
-        document.body.setAttribute("wsr-get-1", `/ingredients/${ingredient_id}`);
+        document.body.setAttribute(
+          "wsr-get-1",
+          `/ingredients/${ingredient_id}`,
+        );
       };
-      wsrCallbacks.focusWidget = function(id_ptr, id_len) {
+      wsrCallbacks.focusWidget = function (id_ptr, id_len) {
         const id = getWasmString(id_ptr, id_len);
         const elem = document.getElementById(id);
         elem.focus();
         if (elem.select !== undefined) {
           elem.select();
         }
-      }
+      };
     </script>
   </head>
   <!-- wsr-get-1 is dynamic and injected by js above -->
   <body
     wsr-generate-1="onIngredientResponse"
-    wsr-get-2="/properties" wsr-generate-2="onPropertiesResponse"
-    wsr-get-3="/ingredient_categories" wsr-generate-3="onCategoriesResponse"
+    wsr-get-2="/properties"
+    wsr-generate-2="onPropertiesResponse"
+    wsr-get-3="/ingredient_categories"
+    wsr-generate-3="onCategoriesResponse"
   >
     <spheader-bar></spheader-bar>
     <input id="title" class="common_edit_title" type="text" />
-    <input type="checkbox" id="complete_checkbox" wsr-onevent="click" wsr-generate="onCompleteChecked" />
+    <input
+      type="checkbox"
+      id="complete_checkbox"
+      wsr-onevent="click"
+      wsr-generate="onCompleteChecked"
+    />
     <label for="complete_checkbox"
       >I solemnly swear all information is entered and true</label
     >
     <div id="category_block">
-      <button id="promote_category" wsr-onevent="click" wsr-generate="onPromoteClicked">
+      <button
+        id="promote_category"
+        wsr-onevent="click"
+        wsr-generate="onPromoteClicked"
+      >
         Promote to category
       </button>
     </div>

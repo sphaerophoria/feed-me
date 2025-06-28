@@ -256,7 +256,7 @@ function appendMealDishIngredient(
   delete_button.onclick = async () => {
     await meal_dish.removeIngredient(meal_dish_ingredient.id);
 
-    draggable_list.removeRow(div)
+    draggable_list.removeRow(div);
 
     if (meal_dish.ingredients().length === 0) {
       markIngredientNodeFresh(meal_dish_nodes.get(meal_dish.id()));

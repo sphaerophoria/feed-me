@@ -25,7 +25,6 @@ const Ingredient = struct {
             switch (key) {
                 .id => id = try lexer.nextAsInt(i64),
                 .name => name = try lexer.nextAsStringCopy(alloc),
-
             }
         }
 
@@ -110,7 +109,6 @@ const Category = struct {
             .name = name orelse return error.MissingField,
             .ingredients = ingredients orelse return error.MissingField,
         };
-
     }
 };
 
@@ -124,7 +122,6 @@ fn makeSearchResult(writer: anytype, ingredient: Ingredient) !void {
     try writer.attribute("ingredient-id", ingredient_id_s);
     try writer.content(ingredient.name);
     try writer.closeTag("div");
-
 }
 
 const ResponseHolder = struct {
@@ -154,7 +151,7 @@ const ResponseHolder = struct {
 
     fn parseIngredients() !void {
         var lexer = json.Lexer.init(wsr.getInputBuffer());
-        instance.ingredients = try lexer.parseList(Ingredient, IngredientParseCtx{.alloc = std.heap.wasm_allocator}, std.heap.wasm_allocator);
+        instance.ingredients = try lexer.parseList(Ingredient, IngredientParseCtx{ .alloc = std.heap.wasm_allocator }, std.heap.wasm_allocator);
         try buildIfReady();
     }
 
@@ -180,7 +177,6 @@ const ResponseHolder = struct {
         var link_writer = htmlgen.htmlWriter(link_buf.writer());
         for (ingredients.*) |ingredient| {
             if (category.ingredientMappingId(ingredient.id)) |mapping_id| {
-
                 const row_id = try std.fmt.allocPrint(arena.allocator(), "ingredient-{d}", .{ingredient.id});
                 const ingredient_id_s = try std.fmt.allocPrint(arena.allocator(), "{d}", .{ingredient.id});
                 const mapping_id_s = try std.fmt.allocPrint(arena.allocator(), "{d}", .{mapping_id});
@@ -241,7 +237,6 @@ fn makeIngredientRow(scratch: std.mem.Allocator, writer: anytype, ingredient: In
     try writer.closeTag("a");
 
     try writer.closeTag("div");
-
 }
 
 pub export fn onCategory() void {

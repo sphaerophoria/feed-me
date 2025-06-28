@@ -10,7 +10,6 @@
 
 .ingredient_label {
   flex-grow: 1;
-
 }
 #ingredient_properties {
   grid-template-columns: repeat(3, auto);

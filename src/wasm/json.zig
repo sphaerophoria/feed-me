@@ -25,7 +25,7 @@ pub const Lexer = struct {
 
         fn content(self: Output, buf: []const u8) []const u8 {
             switch (self.token_type) {
-                .string => return buf[self.start + 1..self.end - 1],
+                .string => return buf[self.start + 1 .. self.end - 1],
                 else => return buf[self.start..self.end],
             }
         }
@@ -91,15 +91,8 @@ pub const Lexer = struct {
         switch (start.token_type) {
             .object_start => try discardObject(lexer),
             .array_start => try discardArray(lexer),
-            .colon,
-            .string,
-            .number,
-            .true,
-            .false,
-            .null => return,
-            .array_end,
-            .object_end,
-            .invalid => return error.InvalidValue,
+            .colon, .string, .number, .true, .false, .null => return,
+            .array_end, .object_end, .invalid => return error.InvalidValue,
         }
     }
 
@@ -123,14 +116,8 @@ pub const Lexer = struct {
                 .object_start => try discardObject(lexer),
                 .array_start => try discardArray(lexer),
                 .array_end => return,
-                .string,
-                .number,
-                .true,
-                .false,
-                .null => continue,
-                .object_end,
-                .colon,
-                .invalid => return error.InvalidValue,
+                .string, .number, .true, .false, .null => continue,
+                .object_end, .colon, .invalid => return error.InvalidValue,
             }
         }
     }
@@ -184,12 +171,12 @@ pub const Lexer = struct {
         return self.idx;
     }
 
-    pub fn restore(self: *Lexer, restore_point: usize) void  {
+    pub fn restore(self: *Lexer, restore_point: usize) void {
         self.idx = restore_point;
     }
 
     fn consumeWhitespace(self: *Lexer) void {
-        const ws_chars = [_]u8{0x20, 0x0A, 0x0D, 0x09, ','};
+        const ws_chars = [_]u8{ 0x20, 0x0A, 0x0D, 0x09, ',' };
         self.idx = std.mem.indexOfNonePos(u8, self.content, self.idx, &ws_chars) orelse self.content.len;
     }
 
@@ -203,17 +190,17 @@ pub const Lexer = struct {
     fn scanValue(self: *Lexer) ?Output {
         if (self.idx >= self.content.len) return null;
         const scan_res: ScanResult = switch (self.content[self.idx]) {
-            '{' => .{.token = TokenType.object_start, .consumed_bytes= 1},
-            '}' => .{.token = TokenType.object_end, .consumed_bytes= 1},
-            '[' => .{.token = TokenType.array_start, .consumed_bytes= 1},
-            ']' => .{.token = TokenType.array_end, .consumed_bytes= 1},
-            ':' => .{.token = TokenType.colon, .consumed_bytes = 1},
+            '{' => .{ .token = TokenType.object_start, .consumed_bytes = 1 },
+            '}' => .{ .token = TokenType.object_end, .consumed_bytes = 1 },
+            '[' => .{ .token = TokenType.array_start, .consumed_bytes = 1 },
+            ']' => .{ .token = TokenType.array_end, .consumed_bytes = 1 },
+            ':' => .{ .token = TokenType.colon, .consumed_bytes = 1 },
             '"' => self.scanStringEnd(),
             't' => self.scanTrue(),
             'f' => self.scanFalse(),
             'n' => self.scanNull(),
             '0'...'9' => self.scanNumber(),
-            else => .{.token = TokenType.invalid, .consumed_bytes= 0},
+            else => .{ .token = TokenType.invalid, .consumed_bytes = 0 },
         };
 
         defer self.idx += scan_res.consumed_bytes;
@@ -256,7 +243,7 @@ pub const Lexer = struct {
             return .invalid;
         }
 
-        if (std.mem.eql(u8, self.content[self.idx..self.idx + ident.len], ident)) {
+        if (std.mem.eql(u8, self.content[self.idx .. self.idx + ident.len], ident)) {
             return .{
                 .token = on_match,
                 .consumed_bytes = ident.len,
@@ -298,4 +285,3 @@ pub const Lexer = struct {
         };
     }
 };
-

@@ -21,6 +21,6 @@ pub export fn parse() void {
     var arena = std.heap.ArenaAllocator.init(std.heap.wasm_allocator);
     defer arena.deinit();
 
-    const value = std.json.parseFromSliceLeaky(Ingredient, arena.allocator(), wsr.getInputBuffer(), .{.ignore_unknown_fields = true});
+    const value = std.json.parseFromSliceLeaky(Ingredient, arena.allocator(), wsr.getInputBuffer(), .{ .ignore_unknown_fields = true });
     wsr.print("{any}", .{value});
 }
