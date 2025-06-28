@@ -187,7 +187,6 @@ function bindWsrEvent(elem) {
   const wasm_target = elem.getAttribute("wsr-generate");
   elem.addEventListener(event, (ev) => {
     current_event = ev;
-    if (current_event.target.value) console.log(current_event.target.value);
     callWasmTarget(elem, wasm_target);
     current_event = null;
   });
