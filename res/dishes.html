@@ -3,11 +3,13 @@
   <head>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <link rel="stylesheet" href="/water.css" />
-    <script src="dishes.js" defer type="module"></script>
+    <script src="/wsr.js" wasm-url="/wasm/dishes.wasm"></script>
+    <script src="header.js"></script>
   </head>
   <body>
+    <spheader-bar></spheader-bar>
     <h1>Dishes</h1>
-    <div id="dishes"></div>
+    <div id="dishes" wsr-get="/dishes" wsr-generate="onDishes"></div>
     <input id="new_dish_name" type="text" />
     <button id="add_new_dish">Add</button>
   </body>

@@ -168,10 +168,11 @@ const ResponseHolder = struct {
         const ingredients = &instance.ingredients.?;
         const category = &instance.category.?;
 
-        wsr.replaceElemProperty("category_name_edit", category.name, "value");
 
         var arena = common.makeArena();
         defer arena.deinit();
+
+        wsr.replaceElemProperty("category_name_edit", category.name, "value");
 
         var link_buf = std.ArrayList(u8).init(arena.allocator());
         var link_writer = htmlgen.htmlWriter(link_buf.writer());
@@ -343,4 +344,35 @@ pub fn onIngredientAddedFailable() !void {
 
 pub export fn onIngredientAdded() void {
     common.logFailure(onIngredientAddedFailable());
+}
+
+pub fn onNameChangeFailable() !void {
+    if (ResponseHolder.instance.category == null) {
+        return;
+    }
+    const category = &ResponseHolder.instance.category.?;
+
+    var arena = common.makeArena();
+    defer arena.deinit();
+
+
+    wsr.getSelfProperty("value");
+    const new_name = wsr.getInputBuffer();
+
+    const url = try std.fmt.allocPrint(arena.allocator(), "/ingredient_categories/{d}", .{category.id});
+    const body = try std.json.stringifyAlloc(
+        arena.allocator(),
+        .{
+            .name = new_name,
+        },
+        .{},
+    );
+
+    var req = wsr.RequestFetch.init(url, "PUT");
+    req.addBody(body);
+    req.run();
+}
+
+pub export fn onNameChange() void {
+    common.logFailure(onNameChangeFailable());
 }

@@ -1,4 +1,5 @@
 const std = @import("std");
+const sphtud = @import("sphtud");
 
 const TokenType = enum {
     object_start,
@@ -13,6 +14,7 @@ const TokenType = enum {
     null,
     invalid,
 };
+
 
 pub const Lexer = struct {
     content: []const u8,
@@ -122,20 +124,58 @@ pub const Lexer = struct {
         }
     }
 
-    pub fn nextAsString(self: *Lexer) ![]const u8 {
+    const MaybeRef = struct {
+        copy: bool,
+        content: []const u8,
+    };
+
+    pub fn nextAsStringRefInner(self: *Lexer, alloc: std.mem.Allocator) !MaybeRef {
         const res = self.next() orelse return error.NoValue;
         switch (res.token_type) {
             .string => {},
             .number => {},
             else => return error.InvalidType,
         }
+        const content = res.content(self.content);
 
-        return res.content(self.content);
+        var next_backslash = std.mem.indexOfScalar(u8, content, '\\') orelse return .{
+            .copy = false,
+            .content = content,
+        };
+
+        var ret = try sphtud.util.RuntimeBoundedArray(u8).init(alloc, content.len);
+        try ret.appendSlice(content[0..next_backslash]);
+        var idx = next_backslash + 1;
+
+        while (true) {
+            if (idx >= content.len) break;
+            next_backslash = std.mem.indexOfScalarPos(u8, content, idx, '\\') orelse content.len;
+
+            try ret.appendSlice(content[idx..next_backslash]);
+            idx = next_backslash + 1;
+
+            const escaped_idx = next_backslash + 1;
+            if (escaped_idx >= content.len) break;
+            try ret.append(content[escaped_idx]);
+
+            idx = escaped_idx + 1;
+        }
+
+        return .{
+            .copy = true,
+            .content = ret.items,
+        };
+    }
+
+    // alloc needed because escaped strings need to be copied
+    pub fn nextAsStringRef(self: *Lexer, alloc: std.mem.Allocator) ![]const u8 {
+        return (try self.nextAsStringRefInner(alloc)).content;
     }
 
     pub fn nextAsStringCopy(self: *Lexer, alloc: std.mem.Allocator) ![]const u8 {
-        const s = try self.nextAsString();
-        return try alloc.dupe(u8, s);
+        const s = try self.nextAsStringRefInner(alloc);
+        if (s.copy) return s.content;
+        return try alloc.dupe(u8, s.content);
     }
 
     pub fn nextAsInt(self: *Lexer, comptime T: type) !T {
@@ -285,3 +325,7 @@ pub const Lexer = struct {
         };
     }
 };
+
+fn hasBackslash(s: []const u8) bool {
+    return std.mem.indexOfScalar(u8, s, '\\') != null;
+}

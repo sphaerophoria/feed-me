@@ -420,6 +420,28 @@ const Page = struct {
 
         wsr.replaceSelfProperty(out_buf.items, "elems");
     }
+
+    fn onNameEdit() !void {
+        const self = try getInstance();
+
+        var arena = common.makeArena();
+        defer arena.deinit();
+
+        wsr.getSelfProperty("value");
+        const new_name = wsr.getInputBuffer();
+
+        const url = try std.fmt.allocPrint(arena.allocator(), "/ingredients/{d}", .{self.ingredient.id});
+        const req_body = try std.json.stringifyAlloc(arena.allocator(),
+            .{
+                .name = new_name,
+            },
+            .{},
+        );
+
+        var req = wsr.RequestFetch.init(url, "PUT");
+        req.addBody(req_body);
+        req.run();
+    }
 };
 
 const IngredientCategoryIdParseCtx = struct {
@@ -485,7 +507,7 @@ const Ingredient = struct {
 
             switch (key) {
                 .id => id = try lexer.nextAsInt(i64),
-                .name => name = try alloc.dupe(u8, try lexer.nextAsString()),
+                .name => name = try lexer.nextAsStringCopy(alloc),
                 .serving_size_g => serving_size_g = try lexer.nextAsInt(i64),
                 .serving_size_ml => serving_size_ml = try lexer.nextAsInt(i64),
                 .serving_size_pieces => serving_size_pieces = try lexer.nextAsInt(i64),
@@ -534,7 +556,7 @@ const Property = struct {
 
             switch (key) {
                 .id => id = try lexer.nextAsInt(i64),
-                .name => name = try alloc.dupe(u8, try lexer.nextAsString()),
+                .name => name = try lexer.nextAsStringCopy(alloc),
             }
         }
 
@@ -577,7 +599,7 @@ const IngredientProperty = struct {
                 .value => {
                     // Always of form abc.def due to FixedPointNumber
                     // serialization on the server
-                    const tmp = try lexer.nextAsString();
+                    const tmp = try lexer.nextAsStringRef(alloc);
                     var end_idx = tmp.len;
                     while (tmp[end_idx - 1] == '0') {
                         end_idx -= 1;
@@ -705,4 +727,8 @@ pub export fn onPropertyAdded() void {
 
 pub export fn onPropertySearchInput() void {
     common.logFailure(Page.onPropertySearchInput());
+}
+
+pub export fn onNameEdit() void {
+    common.logFailure(Page.onNameEdit());
 }

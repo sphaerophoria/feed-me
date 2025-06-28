@@ -11,7 +11,7 @@
     <spheader-bar></spheader-bar>
     <h1>Properties</h1>
     <div id="properties" wsr-get="/properties" wsr-generate="onProperties"></div>
-    <input id="new_property_name" type="text" />
-    <button id="add_new_property">Add</button>
+    <input id="new_property_name" placeholder="New property..." type="text" wsr-onevent="keyup" wsr-generate="newProperty"/>
+    <button id="add_new_property" wsr-event="click" wsr-generate="newProperty">Add</button>
   </body>
 </html>

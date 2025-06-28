@@ -8,7 +8,7 @@ const IngredientProperty = struct {
     property_id: []const u8,
     value: []const u8,
 
-    fn parseJson(lexer: *json.Lexer) !IngredientProperty {
+    fn parseJson(alloc: std.mem.Allocator, lexer: *json.Lexer) !IngredientProperty {
         const lexer_cp = lexer.checkpoint();
         errdefer lexer.restore(lexer_cp);
 
@@ -25,10 +25,10 @@ const IngredientProperty = struct {
             };
 
             switch (field) {
-                .id => ret.id = try lexer.nextAsString(),
-                .ingredient_id => ret.ingredient_id = try lexer.nextAsString(),
-                .property_id => ret.property_id = try lexer.nextAsString(),
-                .value => ret.value = try lexer.nextAsString(),
+                .id => ret.id = try lexer.nextAsStringRef(alloc),
+                .ingredient_id => ret.ingredient_id = try lexer.nextAsStringRef(alloc),
+                .property_id => ret.property_id = try lexer.nextAsStringRef(alloc),
+                .value => ret.value = try lexer.nextAsStringRef(alloc),
             }
         }
 
@@ -66,15 +66,15 @@ const Ingredient = struct {
             };
 
             switch (key) {
-                .id => id = try lexer.nextAsString(),
-                .name => name = try lexer.nextAsString(),
-                .serving_size_g => serving_size_g = try lexer.nextAsString(),
-                .serving_size_ml => serving_size_ml = try lexer.nextAsString(),
-                .serving_size_pieces => serving_size_pieces = try lexer.nextAsString(),
+                .id => id = try lexer.nextAsStringRef(alloc),
+                .name => name = try lexer.nextAsStringRef(alloc),
+                .serving_size_g => serving_size_g = try lexer.nextAsStringRef(alloc),
+                .serving_size_ml => serving_size_ml = try lexer.nextAsStringRef(alloc),
+                .serving_size_pieces => serving_size_pieces = try lexer.nextAsStringRef(alloc),
                 .properties => {
                     _ = try lexer.expectToken(.array_start);
                     while (true) {
-                        const property = IngredientProperty.parseJson(lexer) catch {
+                        const property = IngredientProperty.parseJson(alloc, lexer) catch {
                             _ = try lexer.expectToken(.array_end);
                             break;
                         };
@@ -101,5 +101,5 @@ pub export fn parse() void {
 
     var lexer = json.Lexer.init(wsr.getInputBuffer());
     const value = Ingredient.parseJson(arena.allocator(), &lexer) catch return;
-    wsr.writeStdout(value.name);
+    wsr.writeStdout(value.name.content);
 }
