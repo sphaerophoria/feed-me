@@ -4,11 +4,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <link rel="stylesheet" href="/water.css" />
     <link rel="stylesheet" href="properties.css" />
-    <script src="properties.js" defer type="module"></script>
+    <script src="wsr.js" wasm-url="/wasm/properties.wasm"></script>
+    <script src="header.js"></script>
   </head>
   <body>
+    <spheader-bar></spheader-bar>
     <h1>Properties</h1>
-    <div id="properties"></div>
+    <div id="properties" wsr-get="/properties" wsr-generate="onProperties"></div>
     <input id="new_property_name" type="text" />
     <button id="add_new_property">Add</button>
   </body>

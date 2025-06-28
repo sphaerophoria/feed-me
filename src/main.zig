@@ -225,7 +225,6 @@ const HttpContext = struct {
             },
             .wasm => |fs_path| {
                 const buf = self.scratch.allocMax(u8);
-                std.debug.print("{s}\n", .{fs_path});
                 const content = try self.wasm_dir.readFile(fs_path, buf);
                 if (content.len == buf.len) {
                     return error.OutOfMemory;
@@ -233,7 +232,6 @@ const HttpContext = struct {
                 self.scratch.shrinkFrontTo(content.ptr + content.len);
 
                 const content_type = contentTypeFromExtension(fs_path);
-                std.debug.print("{s}\n", .{content_type orelse ""});
 
                 var writer = sphtud.http.httpWriter(connection.writer());
                 try writer.start(.{
@@ -241,7 +239,7 @@ const HttpContext = struct {
                     .content_length = content.len,
                     .content_type = content_type,
                 });
-                try writer.appendHeader("Content-Encoding", "gzip");
+                //try writer.appendHeader("Content-Encoding", "gzip");
                 try writer.writeBody(content);
             },
             .filesystem => |fs_path| {

@@ -64,12 +64,13 @@ const Builder = struct {
         wasm_exe.entry = .disabled;
         wasm_exe.rdynamic = true;
         wasm_exe.want_lto = true;
+        self.b.installArtifact(wasm_exe);
 
         const cmd = self.b.addSystemCommand(&.{"gzip", "-9", "-c"});
         cmd.addFileArg(wasm_exe.getEmittedBin());
         const zipped = cmd.captureStdOut();
 
-        const name_with_extension = std.fmt.allocPrint(self.b.allocator, "{s}.wasm", .{name}) catch unreachable;
+        const name_with_extension = std.fmt.allocPrint(self.b.allocator, "{s}.wasm.gz", .{name}) catch unreachable;
         const install_zip = self.b.addInstallBinFile(zipped, name_with_extension);
         self.b.getInstallStep().dependOn(&install_zip.step);
     }
@@ -87,15 +88,6 @@ pub fn build(b: *std.Build) void {
     builder.addDependencies(exe.root_module);
     b.installArtifact(exe);
 
-    //const json = b.addExecutable(.{
-    //    .name = "json_test",
-    //    .root_source_file = b.path("src/json_parser.zig"),
-    //    .target = builder.target,
-    //    .optimize = builder.optimize,
-    //});
-    //json.root_module.addImport("sphtud", builder.sphtud);
-    //b.installArtifact(json);
-
     builder.makeRunTest("src/main.zig");
     builder.makeRunTest("src/wasm/htmlgen.zig");
 
@@ -105,4 +97,5 @@ pub fn build(b: *std.Build) void {
     builder.makeWasmExe("json_parser", "src/wasm/json_test.zig");
     builder.makeWasmExe("example", "src/wasm/example.zig");
     builder.makeWasmExe("ingredient_category", "src/wasm/ingredient_category.zig");
+    builder.makeWasmExe("properties", "src/wasm/properties.zig");
 }

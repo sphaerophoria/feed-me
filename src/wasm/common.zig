@@ -1,4 +1,5 @@
 const std = @import("std");
+const sphtud = @import("sphtud");
 const wsr = @import("wsr.zig");
 
 pub fn makeArena() std.heap.ArenaAllocator {
