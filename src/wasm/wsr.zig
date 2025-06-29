@@ -69,10 +69,6 @@ const exported = struct {
         std.heap.wasm_allocator.free(input_buffer.*);
         input_buffer.* = std.heap.wasm_allocator.alloc(u8, size) catch return;
     }
-
-    pub export fn crashycrashy() void {
-        @trap();
-    }
 };
 
 // Force reference to ensure in final executable

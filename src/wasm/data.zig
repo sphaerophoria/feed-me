@@ -127,7 +127,7 @@ pub const Properties = struct {
 
             switch (key) {
                 .id => id = try lexer.nextAsInt(i64),
-                .name => name = try lexer.nextAsStringRef(alloc),
+                .name => name = try lexer.nextAsStringCopy(alloc),
                 .parent_id => parent_id = try lexer.nextAsInt(i64),
             }
         }
@@ -167,3 +167,44 @@ pub const Properties = struct {
         return child_map;
     }
 };
+
+pub fn parseArrayToKv(
+        comptime key_field: []const u8,
+        comptime Key: type,
+        value_field: []const u8,
+        comptime Value: type,
+        alloc: std.mem.Allocator,
+        lexer: *json.Lexer,
+) !std.AutoHashMap(Key, Value) {
+    _ = try lexer.expectToken(.array_start);
+
+    var ret = std.AutoHashMap(Key, Value).init(alloc);
+
+    while (lexer.next()) |token| {
+        switch (token.token_type) {
+            .object_start => {},
+            .array_end => break,
+            else => return error.UnexpectedSummaryElem,
+        }
+
+        var key: ?Key = null;
+        var value: ?Value = null;
+
+        while (try lexer.objectKeyOrEnd()) |key_s| {
+            if (std.mem.eql(u8, key_s, key_field)) {
+                key = try lexer.nextAs(Key, alloc);
+            } else if (std.mem.eql(u8, key_s, value_field)) {
+                value = try lexer.nextAs(Value, alloc);
+            } else {
+                try lexer.discardValue();
+            }
+        }
+
+        try ret.put(
+            key orelse return error.MissingField,
+            value orelse return error.MissingField,
+        );
+    }
+
+    return ret;
+}

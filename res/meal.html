@@ -7,12 +7,18 @@
     <link rel="stylesheet" href="meal.css" />
     <script src="wsr.js" wasm-url="/wasm/meal.wasm"></script>
     <script>
+      wsrCallbacks.markSummaryComplete = (id_ptr, id_name) => {
+        const id = getWasmString(id_ptr, id_name);
+        document.getElementById(id).classList.add("complete")
+      };
+
       window.addEventListener("load", () => {
         const url = new URL(window.location.href);
         const meal_id = url.searchParams.get("id");
         document.body.setAttribute("wsr-get-1", `/meals/${meal_id}`);
       });
     </script>
+    <script src="sphdelete-button.js"></script>
     <script src="sphearch2.js"></script>
   </head>
   <!-- wsr-get-1 is dynamic and populated by JS -->

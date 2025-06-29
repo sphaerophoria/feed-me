@@ -43,6 +43,24 @@ pub const Lexer = struct {
         return self.scanValue();
     }
 
+    pub fn nextAs(self: *Lexer, comptime T: type, alloc: std.mem.Allocator) !T {
+        const ti = @typeInfo(T);
+
+        if (T == []const u8) {
+            return self.nextAsStringCopy(alloc);
+        }
+
+        switch (ti) {
+            .int => {
+                return self.nextAsInt(T);
+            },
+            .bool => {
+                return self.nextAsBool();
+            },
+            else => @compileError("Unhandled type " ++ @typeName(T)),
+        }
+    }
+
     pub fn expectToken(self: *Lexer, token: TokenType) !Output {
         const res = self.next() orelse return error.NoToken;
         if (res.token_type != token) {
