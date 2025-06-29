@@ -5,10 +5,26 @@
     <link rel="stylesheet" href="/water.css" />
     <link rel="stylesheet" href="/common.css" />
     <link rel="stylesheet" href="meal.css" />
-    <script src="meal.js" defer="true" type="module"></script>
-    <script src="sphearch.js"></script>
+    <script src="wsr.js" wasm-url="/wasm/meal.wasm"></script>
+    <script>
+      window.addEventListener("load", () => {
+        const url = new URL(window.location.href);
+        const meal_id = url.searchParams.get("id");
+        document.body.setAttribute(
+          "wsr-get-1",
+          `/meals/${meal_id}`,
+        );
+      });
+    </script>
+    <script src="sphearch2.js"></script>
   </head>
-  <body>
+  <!-- wsr-get-1 is dynamic and populated by JS -->
+  <body
+    wsr-generate-1="onMeal"
+    wsr-get-2="/ingredients" wsr-generate-2="onIngredients"
+    wsr-get-3="/properties" wsr-generate-3="onProperties"
+    wsr-get-4="/dishes" wsr-generate-4="onDishes"
+  >
     <h1>Meal <span id="meal_id"></span></h1>
     <button id="delete_meal">Delete</button>
     <div id="meal_dishes"></div>

@@ -1,4 +1,3 @@
-import * as header from "./header.js";
 import { makeMeals, makeDishes, makeProperties } from "./data.js";
 import * as property_helpers from "./property_helpers.js";
 
@@ -190,8 +189,6 @@ function updateSummaryNodes() {
 }
 
 async function init() {
-  header.prependHeaderToBody();
-
   initDateNodes();
 
   await Promise.all([

@@ -19,7 +19,6 @@ const Builder = struct {
             .os_tag = .freestanding,
         });
 
-
         return .{
             .b = b,
             .test_step = b.step("test", ""),
@@ -97,4 +96,5 @@ pub fn build(b: *std.Build) void {
     builder.makeWasmExe("ingredient_category", "src/wasm/ingredient_category.zig");
     builder.makeWasmExe("properties", "src/wasm/properties.zig");
     builder.makeWasmExe("dishes", "src/wasm/dishes.zig");
+    builder.makeWasmExe("meal", "src/wasm/meal.zig");
 }
