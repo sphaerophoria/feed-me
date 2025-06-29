@@ -97,4 +97,5 @@ pub fn build(b: *std.Build) void {
     builder.makeWasmExe("properties", "src/wasm/properties.zig");
     builder.makeWasmExe("dishes", "src/wasm/dishes.zig");
     builder.makeWasmExe("meal", "src/wasm/meal.zig");
+    builder.makeWasmExe("calendar", "src/wasm/calendar.zig");
 }

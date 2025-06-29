@@ -1,0 +1,107 @@
+
+<!doctype html>
+<html>
+  <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="/water.css" />
+    <link rel="stylesheet" href="/common.css" />
+    <link rel="stylesheet" href="calendar.css" />
+    <script src="wsr.js" wasm-url="/wasm/calendar.wasm"></script>
+    <script src="calendar.js" defer></script>
+    <script>
+
+      wsrCallbacks.triggerCalendarUpdate = () => {
+        calendar.updateDates(new Date());
+      }
+
+      window.addEventListener('wsr-ready', () => {
+        const calendar = document.getElementById("calendar");
+        for (const elem of calendar.elems) {
+          elem.setAttribute("wsr-onevent", "sphcalendar-update");
+          elem.setAttribute("wsr-generate", "onCalendarUpdate");
+          wsrAddElem(elem);
+        }
+      })
+    </script>
+  </head>
+  <body
+      wsr-get="/meals" wsr-generate="onMeals"
+  >
+    <h1>Calendar</h1>
+    <sphaero-calendar id="calendar"></sphaero-calendar>
+    <!--
+    <table id="calendar" class="calendar">
+      <thead>
+      <tr>
+        <th>Sunday</th>
+        <th>Monday</th>
+        <th>Tuesday</th>
+        <th>Wednesday</th>
+        <th>Thursday</th>
+        <th>Friday</th>
+        <th>Saturday</th>
+      </tr>
+      </thead>
+      <tbody>
+      <tr>
+        <td></td>
+        <td></td>
+        <td></td>
+        <td></td>
+        <td></td>
+        <td></td>
+        <td></td>
+      </tr>
+        <td></td>
+        <td></td>
+        <td></td>
+        <td></td>
+        <td></td>
+        <td></td>
+        <td></td>
+      <tr>
+        <td></td>
+        <td></td>
+        <td></td>
+        <td></td>
+        <td></td>
+        <td></td>
+        <td></td>
+      </tr>
+      <tr>
+        <td>
+          <div
+            timestamp-start="1234"
+            timestamp-end="5678"
+          ></div>
+        </td>
+        <td></td>
+        <td></td>
+        <td></td>
+        <td></td>
+        <td></td>
+        <td></td>
+      </tr>
+      <tr>
+        <td></td>
+        <td></td>
+        <td></td>
+        <td></td>
+        <td></td>
+        <td></td>
+        <td></td>
+      </tr>
+      <tr>
+        <td></td>
+        <td></td>
+        <td></td>
+        <td></td>
+        <td></td>
+        <td></td>
+        <td></td>
+      </tr>
+      </tbody>
+    </table>
+    -->
+  </body>
+</html>

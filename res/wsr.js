@@ -198,6 +198,7 @@ function handleWsrGetters() {
 }
 
 function bindWsrEvent(elem) {
+  console.log("binding event", elem);
   const event = elem.getAttribute("wsr-onevent");
   const wasm_target = elem.getAttribute("wsr-generate");
   elem.addEventListener(event, (ev) => {
@@ -230,9 +231,11 @@ function handleWsrImmediate() {
 }
 
 function handleNewNodeWsr(elem) {
+  console.log(elem);
   if (elem.getAttribute("wsr-immediate") !== null) {
     doWsrImmediate(elem);
   } else if (elem.getAttribute("wsr-onevent") !== null) {
+    console.log("Added wsr-onevent node");
     bindWsrEvent(elem);
   } else if (elem.getAttribute("wsr-get") !== null) {
     throw new Error("Unimplemented");
@@ -255,6 +258,7 @@ var wsrCallbacks = {};
 
 async function init() {
   const observerOptions = {
+    attributeFilter: ["wsr-onevent", "wsr-immediate", "wsr-get"],
     childList: true,
     subtree: true,
   };
@@ -287,6 +291,15 @@ async function init() {
   handleWsrGetters();
   handleWsrOnEvent();
   handleWsrImmediate();
+
+  window.dispatchEvent(new Event("wsr-ready"));
+}
+
+// HACK: Mutation observer is supposed to catch this, but in some scenarios
+// (modify attributes of un-monitored children) it does not work. In reality
+// we should fix our mutation observer, but for now we allow explicit modification
+function wsrAddElem(elem) {
+  bindWsrEvent(elem);
 }
 
 window.addEventListener("load", init);
