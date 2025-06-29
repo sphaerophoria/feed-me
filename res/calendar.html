@@ -1,4 +1,3 @@
-
 <!doctype html>
 <html>
   <head>
@@ -9,24 +8,21 @@
     <script src="wsr.js" wasm-url="/wasm/calendar.wasm"></script>
     <script src="calendar.js" defer></script>
     <script>
-
       wsrCallbacks.triggerCalendarUpdate = () => {
         calendar.updateDates(new Date());
-      }
+      };
 
-      window.addEventListener('wsr-ready', () => {
+      window.addEventListener("wsr-ready", () => {
         const calendar = document.getElementById("calendar");
         for (const elem of calendar.elems) {
           elem.setAttribute("wsr-onevent", "sphcalendar-update");
           elem.setAttribute("wsr-generate", "onCalendarUpdate");
           wsrAddElem(elem);
         }
-      })
+      });
     </script>
   </head>
-  <body
-      wsr-get="/meals" wsr-generate="onMeals"
-  >
+  <body wsr-get="/meals" wsr-generate="onMeals">
     <h1>Calendar</h1>
     <sphaero-calendar id="calendar"></sphaero-calendar>
     <!--

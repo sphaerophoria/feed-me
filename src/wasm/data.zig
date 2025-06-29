@@ -169,12 +169,12 @@ pub const Properties = struct {
 };
 
 pub fn parseArrayToKv(
-        comptime key_field: []const u8,
-        comptime Key: type,
-        value_field: []const u8,
-        comptime Value: type,
-        alloc: std.mem.Allocator,
-        lexer: *json.Lexer,
+    comptime key_field: []const u8,
+    comptime Key: type,
+    value_field: []const u8,
+    comptime Value: type,
+    alloc: std.mem.Allocator,
+    lexer: *json.Lexer,
 ) !std.AutoHashMap(Key, Value) {
     _ = try lexer.expectToken(.array_start);
 

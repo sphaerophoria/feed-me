@@ -26,7 +26,6 @@ const Meal = struct {
             switch (key) {
                 .id => id = try lexer.nextAsInt(i64),
                 .timestamp_utc => timestamp_utc = try lexer.nextAsInt(i64),
-
             }
         }
 

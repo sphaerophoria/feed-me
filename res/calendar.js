@@ -1,4 +1,3 @@
-
 class Calendar extends HTMLElement {
   connectedCallback() {
     const table = document.createElement("table");
@@ -9,15 +8,14 @@ class Calendar extends HTMLElement {
     header.append(header_row);
 
     for (const day of [
-        "Sunday",
-        "Monday",
-        "Tuesday",
-        "Wednesday",
-        "Thursday",
-        "Friday",
-        "Saturday",
+      "Sunday",
+      "Monday",
+      "Tuesday",
+      "Wednesday",
+      "Thursday",
+      "Friday",
+      "Saturday",
     ]) {
-
       const th = document.createElement("th");
       th.innerText = day;
       header_row.append(th);
@@ -44,7 +42,9 @@ class Calendar extends HTMLElement {
   }
 
   get elems() {
-    return Array.from(this.querySelectorAll("table > tbody > tr > td > div:nth-child(2)"))
+    return Array.from(
+      this.querySelectorAll("table > tbody > tr > td > div:nth-child(2)"),
+    );
   }
 
   updateDates(date) {
@@ -54,11 +54,12 @@ class Calendar extends HTMLElement {
     it.setMinutes(0);
     it.setSeconds(0);
 
-
     const first_day_idx = it.getDay();
-    const month_idx = it.getMonth()
+    const month_idx = it.getMonth();
 
-    let date_elems = Array.from(this.querySelectorAll("table > tbody > tr > td > div:nth-child(1)"))
+    let date_elems = Array.from(
+      this.querySelectorAll("table > tbody > tr > td > div:nth-child(1)"),
+    );
     let content_elems = this.elems;
 
     for (const elem of date_elems) {

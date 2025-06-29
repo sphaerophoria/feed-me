@@ -36,7 +36,6 @@ const MealDish = struct {
             .id = id orelse return error.MissingField,
             .dish_id = dish_id orelse return error.MissingField,
         };
-
     }
 };
 
@@ -73,8 +72,10 @@ const Meal = struct {
                 },
                 .summary_complete => summary_complete = try lexer.nextAsBool(),
                 .summary => summary = try data.parseArrayToKv(
-                    "property_id", i64,
-                    "value", []const u8,
+                    "property_id",
+                    i64,
+                    "value",
+                    []const u8,
                     alloc,
                     lexer,
                 ),
@@ -110,7 +111,6 @@ fn buildIfReady() !void {
 }
 
 fn makeDishList(meal: *const Meal, dishes: *const std.AutoHashMap(i64, []const u8)) !void {
-
     var arena = common.makeArena();
     defer arena.deinit();
 
@@ -158,7 +158,7 @@ fn makeSummary(alloc: std.mem.Allocator, properties: *const data.Properties, mea
             .level => |prop| {
                 try writePropSummary(prop, meal, margin, &writer);
             },
-            .indent_up => |prop|  {
+            .indent_up => |prop| {
                 margin += 2;
                 try writePropSummary(prop, meal, margin, &writer);
             },

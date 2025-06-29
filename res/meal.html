@@ -9,7 +9,7 @@
     <script>
       wsrCallbacks.markSummaryComplete = (id_ptr, id_name) => {
         const id = getWasmString(id_ptr, id_name);
-        document.getElementById(id).classList.add("complete")
+        document.getElementById(id).classList.add("complete");
       };
 
       window.addEventListener("load", () => {
