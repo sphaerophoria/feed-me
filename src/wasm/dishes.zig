@@ -33,20 +33,19 @@ const Dish = struct {
             .id = id orelse return error.MissingField,
             .name = name orelse return error.MissingField,
         };
-
     }
 };
 const ParseCtx = struct {
     alloc: std.mem.Allocator,
 
-    pub fn parse(self: @This(), lexer: *json.Lexer) !Dish{
+    pub fn parse(self: @This(), lexer: *json.Lexer) !Dish {
         return Dish.parse(self.alloc, lexer);
     }
 };
 
 fn parseDishNames(alloc: std.mem.Allocator) ![]const Dish {
     var lexer = json.Lexer.init(wsr.getInputBuffer());
-    return try lexer.parseList(Dish, ParseCtx{.alloc = alloc}, alloc);
+    return try lexer.parseList(Dish, ParseCtx{ .alloc = alloc }, alloc);
 }
 
 pub fn onDishesFailable() !void {
@@ -85,11 +84,11 @@ pub fn onDishRenameFailable() !void {
 
     var req = wsr.RequestFetch.init(url, "PUT");
     req.addBody(try std.json.stringifyAlloc(
-            arena.allocator(),
-            .{
-                .name = new_name,
-            },
-            .{},
+        arena.allocator(),
+        .{
+            .name = new_name,
+        },
+        .{},
     ));
     req.run();
 }

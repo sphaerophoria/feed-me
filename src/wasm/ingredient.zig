@@ -431,7 +431,8 @@ const Page = struct {
         const new_name = wsr.getInputBuffer();
 
         const url = try std.fmt.allocPrint(arena.allocator(), "/ingredients/{d}", .{self.ingredient.id});
-        const req_body = try std.json.stringifyAlloc(arena.allocator(),
+        const req_body = try std.json.stringifyAlloc(
+            arena.allocator(),
             .{
                 .name = new_name,
             },

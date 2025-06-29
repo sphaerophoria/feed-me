@@ -15,7 +15,6 @@ const TokenType = enum {
     invalid,
 };
 
-
 pub const Lexer = struct {
     content: []const u8,
     idx: usize = 0,

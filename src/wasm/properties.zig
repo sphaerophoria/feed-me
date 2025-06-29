@@ -23,7 +23,6 @@ fn makePropertyInput(property: Properties.Iter.PropertyElem, out: anytype) !void
     try out.attribute("wsr-onevent", "input");
     try out.attribute("wsr-generate", "onNameChange");
     try out.selfClose();
-
 }
 
 fn writePropertiesHtml(alloc: std.mem.Allocator, properties: *const Properties) !void {
@@ -42,7 +41,6 @@ fn writePropertiesHtml(alloc: std.mem.Allocator, properties: *const Properties) 
                 try makePropertyInput(p, &writer);
             },
             .indent_down => {
-
                 try writer.closeTag("div");
             },
         }

@@ -60,12 +60,10 @@ pub const Properties = struct {
                             .idx = 0,
                         });
                     }
-                    return .{
-                        .level = .{
-                            .id = next_entry.key_ptr.*,
-                            .name = next_entry.value_ptr.name,
-                        }
-                    };
+                    return .{ .level = .{
+                        .id = next_entry.key_ptr.*,
+                        .name = next_entry.value_ptr.name,
+                    } };
                 }
             }
 
@@ -86,10 +84,9 @@ pub const Properties = struct {
                     .items = children.items,
                     .idx = 0,
                 });
-
             }
 
-            const ret_elem = PropertyElem {
+            const ret_elem = PropertyElem{
                 .id = next_elem_id,
                 .name = next_elem.name,
             };
@@ -120,7 +117,7 @@ pub const Properties = struct {
         var name: ?[]const u8 = null;
         var parent_id: ?i64 = null;
 
-        const Fields = enum {id, name, parent_id};
+        const Fields = enum { id, name, parent_id };
 
         while (try lexer.objectKeyOrEnd()) |key_s| {
             const key = std.meta.stringToEnum(Fields, key_s) orelse {

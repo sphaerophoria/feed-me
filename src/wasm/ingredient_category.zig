@@ -168,7 +168,6 @@ const ResponseHolder = struct {
         const ingredients = &instance.ingredients.?;
         const category = &instance.category.?;
 
-
         var arena = common.makeArena();
         defer arena.deinit();
 
@@ -354,7 +353,6 @@ pub fn onNameChangeFailable() !void {
 
     var arena = common.makeArena();
     defer arena.deinit();
-
 
     wsr.getSelfProperty("value");
     const new_name = wsr.getInputBuffer();

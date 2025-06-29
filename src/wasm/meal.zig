@@ -2,14 +2,12 @@ const wsr = @import("wsr.zig");
 const common = @import("common.zig");
 const data = @import("data.zig");
 
-
 pub export fn onMeal() void {
     wsr.writeStdout(wsr.getInputBuffer());
 }
 
 pub export fn onIngredients() void {
     wsr.writeStdout(wsr.getInputBuffer());
-
 }
 
 pub fn onPropertiesFailable() !void {
@@ -30,9 +28,9 @@ pub fn onPropertiesFailable() !void {
             .indent_down => {
                 indent -= 1;
                 continue;
-            }
+            },
         };
-        wsr.print("{d}: {s}", .{indent, name});
+        wsr.print("{d}: {s}", .{ indent, name });
     }
 }
 pub export fn onProperties() void {
