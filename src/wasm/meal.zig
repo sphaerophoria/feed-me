@@ -1,113 +1,17 @@
 const std = @import("std");
 const wsr = @import("wsr.zig");
 const common = @import("common.zig");
-const data = @import("data.zig");
 const json = @import("json.zig");
 const htmlgen = @import("htmlgen.zig");
+const data = @import("meal/data.zig");
+const common_data = @import("data.zig");
 
 extern fn markSummaryComplete(id_ptr: [*]const u8, id_len: usize) void;
 
-const MealDish = struct {
-    id: i64,
-    dish_id: i64,
-
-    fn parse(lexer: *json.Lexer) !MealDish {
-        const cp = lexer.checkpoint();
-        errdefer lexer.restore(cp);
-
-        _ = try lexer.expectToken(.object_start);
-
-        var id: ?i64 = null;
-        var dish_id: ?i64 = null;
-
-        while (try lexer.objectKeyOrEnd()) |key_s| {
-            const key = std.meta.stringToEnum(std.meta.FieldEnum(MealDish), key_s) orelse {
-                try lexer.discardValue();
-                continue;
-            };
-
-            switch (key) {
-                .id => id = try lexer.nextAsInt(i64),
-                .dish_id => dish_id = try lexer.nextAsInt(i64),
-            }
-        }
-
-        return .{
-            .id = id orelse return error.MissingField,
-            .dish_id = dish_id orelse return error.MissingField,
-        };
-    }
-};
-
-const MealDishParseCtx = struct {
-    pub fn parse(_: MealDishParseCtx, lexer: *json.Lexer) !MealDish {
-        return MealDish.parse(lexer);
-    }
-};
-
-const Meal = struct {
-    arena: std.heap.ArenaAllocator,
-    id: i64,
-    dishes: []const MealDish,
-    summary_complete: bool,
-    summary: std.AutoHashMap(i64, []const u8),
-
-    fn parse(backing_alloc: std.mem.Allocator, lexer: *json.Lexer) !Meal {
-        var arena = std.heap.ArenaAllocator.init(backing_alloc);
-        errdefer arena.deinit();
-
-        const cp = lexer.checkpoint();
-        errdefer lexer.restore(cp);
-
-        _ = try lexer.expectToken(.object_start);
-
-        var id: ?i64 = null;
-        var summary_complete: ?bool = null;
-        var summary: ?std.AutoHashMap(i64, []const u8) = null;
-        var dishes: ?[]const MealDish = null;
-
-        const Fields = enum {id, dishes, summary_complete, summary };
-        while (try lexer.objectKeyOrEnd()) |key_s| {
-            const key = std.meta.stringToEnum(Fields, key_s) orelse {
-                try lexer.discardValue();
-                continue;
-            };
-
-            switch (key) {
-                .id => id = try lexer.nextAsInt(i64),
-                .dishes => dishes = try lexer.parseList(MealDish, MealDishParseCtx{}, arena.allocator()),
-                .summary_complete => summary_complete = try lexer.nextAsBool(),
-                .summary => summary = try data.parseArrayToKv(
-                    "property_id",
-                    i64,
-                    "value",
-                    []const u8,
-                    arena.allocator(),
-                    lexer,
-                ),
-            }
-        }
-
-        return .{
-            .arena = arena,
-            .id = id orelse return error.MissingField,
-            .summary_complete = summary_complete orelse return error.MissingField,
-            .summary = summary orelse return error.MissingField,
-            .dishes = dishes orelse &.{},
-        };
-    }
-};
-
-const ResponseHolder = struct {
-    var properties: ?data.Properties = null;
-    var meal: ?Meal = null;
-    var dishes: ?std.AutoHashMap(i64, []const u8) = null;
-};
-
 fn buildIfReady() !void {
-    const properties = &(ResponseHolder.properties orelse return);
-    const meal = &(ResponseHolder.meal orelse return);
-    const dishes = &(ResponseHolder.dishes orelse return);
+    const properties = &(data.global.properties orelse return);
+    const meal = &(data.global.meal orelse return);
+    const dishes = &(data.global.dishes orelse return);
 
     var arena = common.makeArena();
     defer arena.deinit();
@@ -144,7 +48,7 @@ fn populateDishSearch(dishes: *const std.AutoHashMap(i64, []const u8)) !void {
     wsr.replaceElemProperty("instantiate_dish", out_buf.items, "elems");
 }
 
-fn pushMealDish(scratch: std.mem.Allocator, meal_dish: MealDish, dishes: *const std.AutoHashMap(i64, []const u8), writer: anytype) !void {
+fn pushMealDish(scratch: std.mem.Allocator, meal_dish: data.MealDish, dishes: *const std.AutoHashMap(i64, []const u8), writer: anytype) !void {
 
     const dish_name = dishes.get(meal_dish.dish_id) orelse return error.MissingDish;
     const meal_dish_id_s = try std.fmt.allocPrint(scratch, "{d}", .{meal_dish.id});
@@ -170,7 +74,7 @@ fn pushMealDish(scratch: std.mem.Allocator, meal_dish: MealDish, dishes: *const 
     try writer.closeTag("div");
 }
 
-fn makeDishList(meal: *const Meal, dishes: *const std.AutoHashMap(i64, []const u8)) !void {
+fn makeDishList(meal: *const data.Meal, dishes: *const std.AutoHashMap(i64, []const u8)) !void {
     var arena = common.makeArena();
     defer arena.deinit();
 
@@ -184,7 +88,7 @@ fn makeDishList(meal: *const Meal, dishes: *const std.AutoHashMap(i64, []const u
     wsr.replaceElemProperty("meal_dishes", out_buf.items, "innerHTML");
 }
 
-fn makeSummary(properties: *const data.Properties, meal: *const Meal) !void {
+fn makeSummary(properties: *const common_data.Properties, meal: *const data.Meal) !void {
     var arena = common.makeArena();
     defer arena.deinit();
 
@@ -220,7 +124,7 @@ fn makeSummary(properties: *const data.Properties, meal: *const Meal) !void {
     }
 }
 
-fn writePropSummary(prop: data.Properties.Iter.PropertyElem, meal: *const Meal, margin: i32, writer: anytype) !void {
+fn writePropSummary(prop: common_data.Properties.Iter.PropertyElem, meal: *const data.Meal, margin: i32, writer: anytype) !void {
     const value = meal.summary.get(prop.id) orelse return;
 
     var key_style_buf: [20]u8 = undefined;
@@ -237,9 +141,7 @@ fn writePropSummary(prop: data.Properties.Iter.PropertyElem, meal: *const Meal, 
 }
 
 pub fn onMealFailable() !void {
-    var lexer = json.Lexer.init(wsr.getInputBuffer());
-    ResponseHolder.meal = try Meal.parse(std.heap.wasm_allocator, &lexer);
-
+    try data.onMeal(wsr.getInputBuffer());
     try buildIfReady();
 }
 
@@ -250,11 +152,8 @@ pub export fn onMeal() void {
 pub export fn onIngredients() void {
 }
 
-pub fn onPropertiesFailable() !void {
-    var arena = common.makeArena();
-    defer arena.deinit();
-
-    ResponseHolder.properties = try data.Properties.parse(std.heap.wasm_allocator, wsr.getInputBuffer());
+fn onPropertiesFailable() !void {
+    try data.onProperties(wsr.getInputBuffer());
     try buildIfReady();
 }
 
@@ -263,9 +162,7 @@ pub export fn onProperties() void {
 }
 
 fn onDishesFailable() !void {
-    var lexer = json.Lexer.init(wsr.getInputBuffer());
-
-    ResponseHolder.dishes = try data.parseArrayToKv("id", i64, "name", []const u8, std.heap.wasm_allocator, &lexer);
+    try data.onDishes(wsr.getInputBuffer());
     try buildIfReady();
 }
 
@@ -299,7 +196,7 @@ fn requestMealUpdate() !void {
     var scratch = common.makeArena();
     defer scratch.deinit();
 
-    const meal = &(ResponseHolder.meal orelse return error.NoMeal);
+    const meal = &(data.global.meal orelse return error.NoMeal);
     const url = try std.fmt.allocPrint(scratch.allocator(), "/meals/{d}", .{meal.id});
 
     var req = wsr.RequestFetch.init(url, "GET");
@@ -309,12 +206,12 @@ fn requestMealUpdate() !void {
 
 pub fn onMealUpdateFailable() !void {
     var lexer = json.Lexer.init(wsr.getInputBuffer());
-    const new_meal = try Meal.parse(std.heap.wasm_allocator, &lexer);
+    const new_meal = try data.Meal.parse(std.heap.wasm_allocator, &lexer);
 
-    ResponseHolder.meal.?.arena.deinit();
-    ResponseHolder.meal = new_meal;
+    data.global.meal.?.arena.deinit();
+    data.global.meal = new_meal;
 
-    const properties = &(ResponseHolder.properties orelse return error.NoProperties);
+    const properties = &(data.global.properties orelse return error.NoProperties);
     try makeSummary(properties, &new_meal);
 }
 
@@ -323,7 +220,7 @@ pub export fn onMealUpdate() void {
 }
 
 pub fn onDishSearchInputFailable() !void {
-    const dishes = &(ResponseHolder.dishes orelse return error.NoDishes);
+    const dishes = &(data.global.dishes orelse return error.NoDishes);
 
     var scratch = common.makeArena();
     defer scratch.deinit();
@@ -358,7 +255,7 @@ pub export fn onDishSearchInput() void {
 }
 
 pub fn onDishSelectedFailable() !void {
-    const meal = &(ResponseHolder.meal orelse return error.NoMeal);
+    const meal = &(data.global.meal orelse return error.NoMeal);
 
     var arena = common.makeArena();
     defer arena.deinit();
@@ -391,12 +288,12 @@ fn onDishAddedFailable() !void {
     defer scratch.deinit();
 
     var lexer = json.Lexer.init(wsr.getInputBuffer());
-    const new_dish = try MealDish.parse(&lexer);
+    const new_dish = try data.MealDish.parse(&lexer);
 
     var out_buf = std.ArrayList(u8).init(scratch.allocator());
     var writer = htmlgen.htmlWriter(out_buf.writer());
 
-    const dishes = &(ResponseHolder.dishes orelse return error.NoDishes);
+    const dishes = &(data.global.dishes orelse return error.NoDishes);
     try pushMealDish(scratch.allocator(), new_dish, dishes, &writer);
 
     wsr.appendToElem("meal_dishes", out_buf.items);
