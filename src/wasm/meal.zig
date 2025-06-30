@@ -5,8 +5,8 @@ const json = @import("json.zig");
 const htmlgen = @import("htmlgen.zig");
 const data = @import("meal/data.zig");
 const common_data = @import("data.zig");
-
-extern fn markSummaryComplete(id_ptr: [*]const u8, id_len: usize) void;
+const summary = @import("meal/summary.zig");
+const dish_search = @import("meal/dish_search.zig");
 
 fn buildIfReady() !void {
     const properties = &(data.global.properties orelse return);
@@ -17,36 +17,10 @@ fn buildIfReady() !void {
     defer arena.deinit();
 
     try makeDishList(meal, dishes);
-    try makeSummary(properties, meal);
-    try populateDishSearch(dishes);
+    try summary.makeSummary(properties, meal);
+    try dish_search.populateDishSearch(dishes);
 }
 
-
-fn pushSearchResult(dish_id: i64, dish_name: []const u8, out: anytype) !void {
-    var id_buf: [10]u8 = undefined;
-    const dish_id_s = try std.fmt.bufPrint(&id_buf, "{d}", .{dish_id});
-
-    try out.openTag("div");
-    try out.attribute("dish-id", dish_id_s);
-    try out.content(dish_name);
-    try out.closeTag("div");
-
-}
-
-fn populateDishSearch(dishes: *const std.AutoHashMap(i64, []const u8)) !void {
-    var arena = common.makeArena();
-    defer arena.deinit();
-
-    var out_buf = std.ArrayList(u8).init(arena.allocator());
-    var writer = htmlgen.htmlWriter(out_buf.writer());
-
-    var it = dishes.iterator();
-    while (it.next()) |entry| {
-        try pushSearchResult(entry.key_ptr.*, entry.value_ptr.*, &writer);
-    }
-
-    wsr.replaceElemProperty("instantiate_dish", out_buf.items, "elems");
-}
 
 fn pushMealDish(scratch: std.mem.Allocator, meal_dish: data.MealDish, dishes: *const std.AutoHashMap(i64, []const u8), writer: anytype) !void {
 
@@ -88,57 +62,7 @@ fn makeDishList(meal: *const data.Meal, dishes: *const std.AutoHashMap(i64, []co
     wsr.replaceElemProperty("meal_dishes", out_buf.items, "innerHTML");
 }
 
-fn makeSummary(properties: *const common_data.Properties, meal: *const data.Meal) !void {
-    var arena = common.makeArena();
-    defer arena.deinit();
 
-    const alloc = arena.allocator();
-
-    var property_it = properties.iter(alloc);
-
-    var html_buf = std.ArrayList(u8).init(alloc);
-    var writer = htmlgen.htmlWriter(html_buf.writer());
-
-    var margin: i32 = 0;
-
-    while (try property_it.next()) |entry| {
-        switch (entry) {
-            .level => |prop| {
-                try writePropSummary(prop, meal, margin, &writer);
-            },
-            .indent_up => |prop| {
-                margin += 2;
-                try writePropSummary(prop, meal, margin, &writer);
-            },
-            .indent_down => {
-                margin -= 2;
-            },
-        }
-    }
-
-    wsr.replaceElemProperty("summary", html_buf.items, "innerHTML");
-
-    if (meal.summary_complete) {
-        const summary_key = "summary";
-        markSummaryComplete(summary_key.ptr, summary_key.len);
-    }
-}
-
-fn writePropSummary(prop: common_data.Properties.Iter.PropertyElem, meal: *const data.Meal, margin: i32, writer: anytype) !void {
-    const value = meal.summary.get(prop.id) orelse return;
-
-    var key_style_buf: [20]u8 = undefined;
-    const key_style_string = try std.fmt.bufPrint(&key_style_buf, "margin-left: {d}em", .{margin});
-    try writer.openTag("div");
-    try writer.attribute("style", key_style_string);
-    try writer.content(prop.name);
-    try writer.closeTag("div");
-
-    try writer.openTag("div");
-    try writer.attribute("style", "justify-self: end; text-align: end");
-    try writer.content(value);
-    try writer.closeTag("div");
-}
 
 pub fn onMealFailable() !void {
     try data.onMeal(wsr.getInputBuffer());
@@ -212,75 +136,19 @@ pub fn onMealUpdateFailable() !void {
     data.global.meal = new_meal;
 
     const properties = &(data.global.properties orelse return error.NoProperties);
-    try makeSummary(properties, &new_meal);
+    try summary.makeSummary(properties, &new_meal);
 }
 
 pub export fn onMealUpdate() void {
     common.logFailure(onMealUpdateFailable());
 }
 
-pub fn onDishSearchInputFailable() !void {
-    const dishes = &(data.global.dishes orelse return error.NoDishes);
-
-    var scratch = common.makeArena();
-    defer scratch.deinit();
-
-    wsr.getSelfProperty("value");
-    var it = dishes.iterator();
-
-    var out_buf = std.ArrayList(u8).init(scratch.allocator());
-    var writer = htmlgen.htmlWriter(out_buf.writer());
-
-    const lower_search = try std.ascii.allocLowerString(
-        scratch.allocator(),
-        wsr.getInputBuffer(),
-    );
-
-    while (it.next()) |entry| {
-        const lower_name = try std.ascii.allocLowerString(
-            scratch.allocator(),
-            entry.value_ptr.*,
-        );
-
-        if (std.mem.indexOf(u8, lower_name, lower_search) != null) {
-            try pushSearchResult(entry.key_ptr.*, entry.value_ptr.*, &writer);
-        }
-    }
-
-    wsr.replaceSelfProperty(out_buf.items, "elems");
-}
-
 pub export fn onDishSearchInput() void {
-    common.logFailure(onDishSearchInputFailable());
-}
-
-pub fn onDishSelectedFailable() !void {
-    const meal = &(data.global.meal orelse return error.NoMeal);
-
-    var arena = common.makeArena();
-    defer arena.deinit();
-
-    wsr.getTargetAttribute("dish-id");
-    const dish_id = try std.fmt.parseInt(i64, wsr.getInputBuffer(), 0);
-    const meal_id = meal.id;
-
-    var req = wsr.RequestFetch.init("/meal_dishes", "PUT");
-    req.addBody(
-        try std.json.stringifyAlloc(
-            arena.allocator(),
-            .{
-                .dish_id = dish_id,
-                .meal_id = meal_id,
-            },
-            .{},
-        ));
-
-    req.addCallback("onDishAdded");
-    req.run();
+    common.logFailure(dish_search.onSearchInput());
 }
 
 pub export fn onDishSelected() void {
-    common.logFailure(onDishSelectedFailable());
+    common.logFailure(dish_search.onSearchSelect());
 }
 
 fn onDishAddedFailable() !void {
