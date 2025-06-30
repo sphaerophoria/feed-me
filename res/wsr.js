@@ -278,7 +278,10 @@ function handleNewNodeWsr(elem) {
 
   if (elem.getAttribute("wsr-immediate") !== null) {
     doWsrImmediate(elem);
-  } else if (elem.getAttribute("wsr-onevent") !== null || elem.getAttribute("wsr-onevent-1") !== null) {
+  } else if (
+    elem.getAttribute("wsr-onevent") !== null ||
+    elem.getAttribute("wsr-onevent-1") !== null
+  ) {
     bindWsrEvent(elem);
   } else if (elem.getAttribute("wsr-get") !== null) {
     throw new Error("Unimplemented");

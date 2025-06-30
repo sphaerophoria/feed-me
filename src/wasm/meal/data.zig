@@ -68,7 +68,7 @@ pub const Meal = struct {
         var summary: ?std.AutoHashMap(i64, []const u8) = null;
         var dishes: ?[]const MealDish = null;
 
-        const Fields = enum {id, dishes, summary_complete, summary };
+        const Fields = enum { id, dishes, summary_complete, summary };
         while (try lexer.objectKeyOrEnd()) |key_s| {
             const key = std.meta.stringToEnum(Fields, key_s) orelse {
                 try lexer.discardValue();

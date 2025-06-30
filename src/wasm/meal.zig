@@ -21,9 +21,7 @@ fn buildIfReady() !void {
     try dish_search.populateDishSearch(dishes);
 }
 
-
 fn pushMealDish(scratch: std.mem.Allocator, meal_dish: data.MealDish, dishes: *const std.AutoHashMap(i64, []const u8), writer: anytype) !void {
-
     const dish_name = dishes.get(meal_dish.dish_id) orelse return error.MissingDish;
     const meal_dish_id_s = try std.fmt.allocPrint(scratch, "{d}", .{meal_dish.id});
     const meal_dish_div_id = try std.fmt.allocPrint(scratch, "meal-dish-{d}", .{meal_dish.id});
@@ -62,8 +60,6 @@ fn makeDishList(meal: *const data.Meal, dishes: *const std.AutoHashMap(i64, []co
     wsr.replaceElemProperty("meal_dishes", out_buf.items, "innerHTML");
 }
 
-
-
 pub fn onMealFailable() !void {
     try data.onMeal(wsr.getInputBuffer());
     try buildIfReady();
@@ -73,8 +69,7 @@ pub export fn onMeal() void {
     common.logFailure(onMealFailable());
 }
 
-pub export fn onIngredients() void {
-}
+pub export fn onIngredients() void {}
 
 fn onPropertiesFailable() !void {
     try data.onProperties(wsr.getInputBuffer());

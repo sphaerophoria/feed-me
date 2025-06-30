@@ -61,15 +61,14 @@ pub fn onSearchSelect() !void {
     const meal_id = meal.id;
 
     var req = wsr.RequestFetch.init("/meal_dishes", "PUT");
-    req.addBody(
-        try std.json.stringifyAlloc(
-            arena.allocator(),
-            .{
-                .dish_id = dish_id,
-                .meal_id = meal_id,
-            },
-            .{},
-        ));
+    req.addBody(try std.json.stringifyAlloc(
+        arena.allocator(),
+        .{
+            .dish_id = dish_id,
+            .meal_id = meal_id,
+        },
+        .{},
+    ));
 
     req.addCallback("onDishAdded");
     req.run();

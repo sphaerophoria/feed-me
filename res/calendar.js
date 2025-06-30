@@ -92,14 +92,14 @@ class Calendar extends HTMLElement {
 
       content_elem.setAttribute("timestamp-end", it.getTime() - tz_offs_s);
 
-      const event = new Event("sphcalendar-update", {bubbles: true});
+      const event = new Event("sphcalendar-update", { bubbles: true });
       content_elem.dispatchEvent(event);
     }
   }
 }
 
 {
-  const css = new CSSStyleSheet()
+  const css = new CSSStyleSheet();
   css.replaceSync(`
     sphaero-calendar > table > tbody > tr > td {
       height: 5em;
