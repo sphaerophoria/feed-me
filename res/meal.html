@@ -19,6 +19,7 @@
       });
     </script>
     <script src="sphdelete-button.js"></script>
+    <script src="header.js"></script>
     <script src="sphearch2.js"></script>
   </head>
   <!-- wsr-get-1 is dynamic and populated by JS -->
@@ -31,6 +32,7 @@
     wsr-get-4="/dishes"
     wsr-generate-4="onDishes"
   >
+    <spheader-bar></spheader-bar>
     <h1>Meal <span id="meal_id"></span></h1>
     <button id="delete_meal">Delete</button>
     <div id="meal_dishes"></div>
@@ -39,6 +41,10 @@
       id="instantiate_dish"
       placeholder="Add a dish..."
       autoselect="true"
+      wsr-onevent-1="input"
+      wsr-generate-1="onDishSearchInput"
+      wsr-onevent-2="sphearch-selected"
+      wsr-generate-2="onDishSelected"
     ></sphearch-bar>
     <h2>Summary</h2>
     <div id="summary" class="common_grid summary"></div>

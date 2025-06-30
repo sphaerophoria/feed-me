@@ -3,11 +3,17 @@ const wasm_url = document.currentScript.getAttribute("wasm-url");
 let wasm_obj = null;
 
 let current_node = null;
+let event_target_node = null;
 let current_event = null;
 let last_error = null;
 
 function print(ptr, len) {
   if (wasm_obj === null) return;
+  if (len == 0) {
+    console.log();
+    return;
+  }
+
   const arr = new Uint8Array(wasm_obj.instance.exports.memory.buffer, ptr, len);
   const decoder = new TextDecoder();
   const s = decoder.decode(arr);
@@ -99,15 +105,26 @@ function getSelfProperty(property_ptr, property_len) {
   setWasmInputBuffer(current_node[prop]);
 }
 
-function getEventProperty(property_ptr, property_len) {
-  const prop = getWasmString(property_ptr, property_len);
-  setWasmInputBuffer(current_event[prop]);
-}
-
 function getSelfAttribute(property_ptr, property_len) {
   //FIXME: Wrong name
   const prop = getWasmString(property_ptr, property_len);
   setWasmInputBuffer(current_node.getAttribute(prop));
+}
+
+function getTargetProperty(property_ptr, property_len) {
+  const prop = getWasmString(property_ptr, property_len);
+  setWasmInputBuffer(event_target_node[prop]);
+}
+
+function getTargetAttribute(property_ptr, property_len) {
+  //FIXME: Wrong name
+  const prop = getWasmString(property_ptr, property_len);
+  setWasmInputBuffer(event_target_node.getAttribute(prop));
+}
+
+function getEventProperty(property_ptr, property_len) {
+  const prop = getWasmString(property_ptr, property_len);
+  setWasmInputBuffer(current_event[prop]);
 }
 
 function callOnResponse(fetch_promise, elem, wasm_target) {
@@ -197,21 +214,47 @@ function handleWsrGetters() {
   }
 }
 
-function bindWsrEvent(elem) {
-  console.log("binding event", elem);
-  const event = elem.getAttribute("wsr-onevent");
-  const wasm_target = elem.getAttribute("wsr-generate");
+function addEventCallback(elem, event, wasm_target) {
   elem.addEventListener(event, (ev) => {
     current_event = ev;
-    callWasmTarget(elem, wasm_target);
+    event_target_node = ev.target;
+    callWasmTarget(ev.currentTarget, wasm_target);
     current_event = null;
+    event_target_node = null;
   });
+}
+
+function bindWsrEvent(elem) {
+  {
+    const event = elem.getAttribute("wsr-onevent");
+    if (event !== null) {
+      const wasm_target = elem.getAttribute("wsr-generate");
+      addEventCallback(elem, event, wasm_target);
+    }
+  }
+
+  let i = 1;
+  while (true) {
+    const event = elem.getAttribute(`wsr-onevent-${i}`);
+    if (event == null) break;
+
+    const wasm_target = elem.getAttribute(`wsr-generate-${i}`);
+    addEventCallback(elem, event, wasm_target);
+    i += 1;
+  }
 }
 
 // FIXME dedup with getters
 function handleWsrOnEvent() {
-  const elems = document.querySelectorAll("[wsr-onevent]");
+  {
+    const elems = document.querySelectorAll("[wsr-onevent]");
 
+    for (const elem of elems) {
+      bindWsrEvent(elem);
+    }
+  }
+
+  const elems = document.querySelectorAll("[wsr-onevent-1]");
   for (const elem of elems) {
     bindWsrEvent(elem);
   }
@@ -231,11 +274,11 @@ function handleWsrImmediate() {
 }
 
 function handleNewNodeWsr(elem) {
-  console.log(elem);
+  if (elem.getAttribute === undefined) return;
+
   if (elem.getAttribute("wsr-immediate") !== null) {
     doWsrImmediate(elem);
-  } else if (elem.getAttribute("wsr-onevent") !== null) {
-    console.log("Added wsr-onevent node");
+  } else if (elem.getAttribute("wsr-onevent") !== null || elem.getAttribute("wsr-onevent-1") !== null) {
     bindWsrEvent(elem);
   } else if (elem.getAttribute("wsr-get") !== null) {
     throw new Error("Unimplemented");
@@ -258,7 +301,6 @@ var wsrCallbacks = {};
 
 async function init() {
   const observerOptions = {
-    attributeFilter: ["wsr-onevent", "wsr-immediate", "wsr-get"],
     childList: true,
     subtree: true,
   };
@@ -275,6 +317,8 @@ async function init() {
       replaceSelfProperty: replaceSelfProperty,
       getSelfProperty: getSelfProperty,
       getSelfAttribute: getSelfAttribute,
+      getTargetProperty: getTargetProperty,
+      getTargetAttribute: getTargetAttribute,
       getElemProperty: getElemProperty,
       appendToElem: appendToElem,
       getEventProperty: getEventProperty,
@@ -293,13 +337,6 @@ async function init() {
   handleWsrImmediate();
 
   window.dispatchEvent(new Event("wsr-ready"));
-}
-
-// HACK: Mutation observer is supposed to catch this, but in some scenarios
-// (modify attributes of un-monitored children) it does not work. In reality
-// we should fix our mutation observer, but for now we allow explicit modification
-function wsrAddElem(elem) {
-  bindWsrEvent(elem);
 }
 
 window.addEventListener("load", init);

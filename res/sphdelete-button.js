@@ -9,6 +9,7 @@ class SphdeleteButton extends HTMLElement {
     const delete_button = document.createElement("input");
     delete_button.type = "image";
     delete_button.src = "delete.svg";
+
     this.append(delete_button);
   }
 }

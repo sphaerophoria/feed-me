@@ -51,7 +51,6 @@ pub fn onMealFailable() !void {
 
     meals = try lexer.parseList(Meal, MealParseCtx{}, std.heap.wasm_allocator);
 
-    wsr.print("Triggering cal update", .{});
     triggerCalendarUpdate();
 }
 

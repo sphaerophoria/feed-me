@@ -92,41 +92,20 @@ class Calendar extends HTMLElement {
 
       content_elem.setAttribute("timestamp-end", it.getTime() - tz_offs_s);
 
-      const event = new Event("sphcalendar-update");
+      const event = new Event("sphcalendar-update", {bubbles: true});
       content_elem.dispatchEvent(event);
     }
   }
 }
 
+{
+  const css = new CSSStyleSheet()
+  css.replaceSync(`
+    sphaero-calendar > table > tbody > tr > td {
+      height: 5em;
+      border-style: solid;
+    }
+  `);
+  document.adoptedStyleSheets.push(css);
+}
 window.customElements.define("sphaero-calendar", Calendar);
-
-//function column(row, idx) {
-//  const cols = row.querySelectorAll("td");
-//  console.log(cols[idx]);
-//}
-//
-//const now = new Date();
-//
-//const it = new Date(now.getTime());
-//it.setDate(1);
-//it.setMonth(4);
-//
-//const first_day_idx = it.getDay();
-//const month_idx = it.getMonth()
-//
-//const calendar_root = document.getElementById("calendar");
-//let elems = Array.from(calendar_root.querySelectorAll("tbody > tr > td"))
-//elems = elems.slice(first_day_idx);
-//
-//let elem_idx = 0;
-//
-//while (it.getMonth() == month_idx) {
-//  const div = document.createElement("div");
-//  const it_date = it.getDate();
-//  div.innerText = it_date;
-//  elems[elem_idx].prepend(div);
-//  elem_idx += 1;
-//  it.setDate(it_date + 1);
-//}
-//
-//console.log(elems);

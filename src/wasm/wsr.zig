@@ -50,6 +50,14 @@ const imported = struct {
         prop_ptr: [*]const u8,
         prop_len: usize,
     ) void;
+    extern fn getTargetAttribute(
+        attr_ptr: [*]const u8,
+        attr_len: usize,
+    ) void;
+    extern fn getTargetProperty(
+        prop_ptr: [*]const u8,
+        prop_len: usize,
+    ) void;
     extern fn getEventProperty(
         prop_ptr: [*]const u8,
         prop_len: usize,
@@ -189,6 +197,14 @@ pub fn getSelfProperty(name: []const u8) void {
 
 pub fn getEventProperty(name: []const u8) void {
     imported.getEventProperty(name.ptr, name.len);
+}
+
+pub fn getTargetProperty(name: []const u8) void {
+    imported.getTargetProperty(name.ptr, name.len);
+}
+
+pub fn getTargetAttribute(name: []const u8) void {
+    imported.getTargetAttribute(name.ptr, name.len);
 }
 
 pub fn panic(msg: []const u8, stack_trace: ?*std.builtin.StackTrace, return_address: ?usize) noreturn {
