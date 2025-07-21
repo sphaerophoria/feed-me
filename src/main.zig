@@ -264,12 +264,14 @@ fn contentTypeFromExtension(path: []const u8) ?[]const u8 {
     const KnownExtensions = enum {
         @".html",
         @".js",
+        @".svg",
     };
 
     const parsed_extension = std.meta.stringToEnum(KnownExtensions, extension) orelse return null;
     return switch (parsed_extension) {
         .@".html" => "text/html",
         .@".js" => "text/javascript",
+        .@".svg" => "image/svg+xml",
     };
 }
 
